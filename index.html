@@ -74,7 +74,7 @@ td.mid{color:var(--warn-t);background:var(--warnbg)}td.na{color:var(--muted);fon
 .canvas{position:relative;height:340px}
 .note{font-size:12px;color:var(--muted);margin-top:8px}
 .msg{padding:10px 14px;border-radius:12px;margin:8px 0;font-size:13px}
-.msg.ok{background:var(--okbg);color:var(--ok-t)}.msg.bad{background:var(--badbg);color:var(--bad-t)}
+.msg.ok{background:var(--okbg);color:var(--ok-t)}.msg.bad{background:var(--badbg);color:var(--bad-t)}.msg.warn{background:var(--warnbg);color:var(--warn-t)}
 dialog{border:1px solid var(--line);border-radius:20px;background:var(--panel);color:var(--fg);padding:22px;min-width:320px}
 dialog::backdrop{background:rgba(0,34,50,.55)}
 dialog form{display:flex;flex-direction:column;gap:12px}
@@ -153,15 +153,18 @@ LABEL.backlogTickets = 'Backlog de Tickets';
 FULL.ticketsFechados = 'Tickets Fechados (quantidade)';
 FULL.backlogTickets = 'Backlog de Tickets (quantidade)';
 LABEL.slaPrimeira = 'SLA 1ª Resposta (%)';
-FULL.slaPrimeira = '% SLA de 1ª Resposta (quando aplicável)';
+FULL.slaPrimeira = '% SLA de 1ª Resposta — contrato N3 (meta 99%)';
 const N2_KEYS = ['ticketsFechados','csat','reab','backlogTickets'];
 const N2_CTX = ['sla','back','tme']; // oficiais, apenas contexto, sem nota individual
 const N2_ENTRY = [...N2_KEYS,...N2_CTX];
 // N3: somente indicadores oficiais; pesos são PROPOSTA gerencial, não constam do PDF oficial.
-const N3_KEYS = ['sla','back','csat','reab'];
-const N3_CTX = ['ticketsFechados','backlogTickets','tme','slaPrimeira'];
-const N3_ENTRY = [...N3_KEYS,...N3_CTX];
-const N3_PASTE = [...N3_KEYS,...N3_CTX];
+// N3: nove indicadores oficiais. FLR pode avaliar o primeiro atendimento DIRETO do N3
+// a clientes prioritários, se o BI extrair a métrica sem misturar apoio ao N2.
+// SLA 1ª resposta é contratual, meta 99%, e deve ser informado na avaliação N3.
+const N3_KEYS = ['slaPrimeira','sla','flr','back','csat','reab','ticketsFechados','backlogTickets','tme'];
+const N3_CTX = [];
+const N3_ENTRY = [...N3_KEYS];
+const N3_PASTE = [...N3_KEYS];
 const isN2 = nivel => nivel === 'N2';
 const isN3 = nivel => nivel === 'N3';
 // 'N1/N2 Peticiona' mantém, por enquanto, as regras atuais do N1.
@@ -171,13 +174,28 @@ const fmtCampo = (k,v) => fmt(v,['ticketsFechados','backlogTickets'].includes(k)
 const HIGHER = {flr:true,csat:true,reab:false,tme:false,sla:true,back:true};
 const DEFAULT_CFG = {
   pesos:{flr:.20,csat:.20,reab:.15,tme:.15,sla:.20,back:.10},
-  // Distribuição SUGERIDA para o N3 (não é peso oficial do Painel de Suporte).
-  n3Pesos:{sla:.35,back:.25,csat:.25,reab:.15},
-  // Referências oficiais: meta SLA Suporte >95%, CSAT >93%.
+  // PESOS GERENCIAIS PROPOSTOS (o painel oficial NÃO estabelece pesos N2/N3).
+  // Não introduzimos indicadores novos: os campos são os do Painel de Suporte Projuris.
+  n2Pesos:{ticketsFechados:.25,csat:.35,reab:.25,backlogTickets:.15},
+  n3Pesos:{slaPrimeira:.25,sla:.20,flr:.10,back:.10,csat:.10,reab:.10,ticketsFechados:.05,backlogTickets:.05,tme:.05},
+  // Benchmarks de volume PROVISÓRIOS, não oficiais: ajuste quando houver histórico por analista.
+  // Tickets fechados: zero = 0 pontos, 20 ou mais/mês = 100 pontos.
+  // Backlog bruto: até 5 = 100 pontos, 25 ou mais = 0 pontos.
+  volumeNota:{ticketsFechados100:20,backlog100:5,backlog0:25},
+  n2Bench:{
+    ticketsFechados:{dir:'up',saud:12,top:20,topNome:'Referência proposta',texto:'PROPOSTA (mensal): atenção <12; saudável 12–19; destaque ≥20 tickets fechados.'},
+    backlogTickets:{dir:'down',saud:12,top:5,topNome:'Referência proposta',texto:'PROPOSTA (posição mensal): destaque ≤5; saudável 6–12; atenção >12 tickets em aberto.'}
+  },
+  // Referências do PDF: SLA Solução >95%, CSAT >93%, FLR geral >95%.
+  // Meta contratual do SLA de primeira resposta N3 = 99%, INFORMADA PELA GESTORA.
   // Os limites de cor abaixo são proposta de visualização, NÃO metas oficiais adicionais.
   n3Bench:{
-    sla:{dir:'up',saud:90,top:95,topNome:'Referência de SLA',texto:'Meta oficial do painel: acima de 95%. Faixa visual sugerida: 90–<95% atenção; ≥95% destaque.'},
+    sla:{dir:'up',saud:90,top:95,topNome:'Referência de SLA',texto:'Meta geral do painel: acima de 95%. Faixa visual sugerida: 90–<95% atenção; ≥95% destaque.'},
     csat:{dir:'up',saud:85,top:93,topNome:'Referência de CSAT',texto:'Meta oficial do painel: acima de 93%. Faixa visual sugerida: 85–<93% atenção; ≥93% destaque.'},
+    ticketsFechados:{dir:'up',saud:12,top:20,topNome:'Referência proposta',texto:'PROPOSTA (mensal): atenção <12; saudável 12–19; destaque ≥20 tickets fechados.'},
+    backlogTickets:{dir:'down',saud:12,top:5,topNome:'Referência proposta',texto:'PROPOSTA: destaque ≤5; saudável 6–12; atenção >12 tickets em aberto.'},
+    slaPrimeira:{dir:'up',saud:99,top:99,topNome:'Meta contratual atendida',texto:'META CONTRATUAL N3: ≥99% (informada pela gestora). Abaixo de 99% = fora da meta. Pontuação gerencial progressiva entre 95% e 99%.'},
+    flr:{dir:'up',saud:90,top:95,topNome:'Referência FLR',texto:'Painel oficial: meta geral de FLR acima de 95%. Aplicar ao N3 apenas aos chamados recebidos diretamente e concluídos sem escalonamento, se o BI disponibilizar o recorte.'}
   },
   lim:{reab:[.03,.12],tme:[8,18],back:[.9,.5]},      // [vale 100 pts, vale 0 pts]
   // Benchmark da aba "Detalhamento" do modelo. dir 'up' = quanto maior melhor; 'down' = quanto menor melhor.
@@ -191,10 +209,10 @@ const DEFAULT_CFG = {
     back:{dir:'up',  saud:60, top:75, topNome:'Excelente',        texto:'Saudável 60–75% · Excelente 75–90%'}
   },
   metaIES:78,                                         // IES mínimo esperado (aba IES_Metas_Bônus, coluna UNLT)
-  naoSeAplica:{'N2':['flr','tme'],'N3':['flr']},      // regra legada N1 / N1-N2 Peticiona
+  naoSeAplica:{'N2':['flr','tme'],'N3':[]}, // N3 agora avalia FLR no atendimento direto prioritário; N1 mantém regra legada
   niveisFora:['Tech Lead']                            // níveis que não entram no IES (não atendem a fila)
 };
-function benchPara(k,cfg,nivel){return isN3(nivel) && cfg.n3Bench[k] ? cfg.n3Bench[k] : cfg.bench[k];}
+function benchPara(k,cfg,nivel){return (isN3(nivel)&&cfg.n3Bench[k])||(isN2(nivel)&&cfg.n2Bench[k])||cfg.bench[k];}
 function faixa(k, v, cfg, nivel){   // 'topo' | 'saudavel' | 'abaixo' | null
   if (v===null||v===undefined||v===''||isNaN(v)) return null;
   const b=benchPara(k,cfg,nivel); if(!b) return null;
@@ -207,7 +225,14 @@ function aplicaveis(nivel, cfg){ const fora=(cfg.naoSeAplica&&cfg.naoSeAplica[ni
 function nota(k, v, cfg){
   if (v===null || v===undefined || v==='' || isNaN(v)) return null;
   v = +v;
-  if (k==='flr'||k==='csat'||k==='sla'||k==='slaPrimeira') return v;
+  if (k==='slaPrimeira') {
+    // PROPOSTA GERENCIAL: régua exigente para meta contratual N3 = 99%.
+    // Até 95% = 0 ponto; 96/97/98% = 25/50/75 pontos; >=99% = 100 pontos.
+    return Math.max(0,Math.min(100,(v-95)*25));
+  }
+  if (k==='flr'||k==='csat'||k==='sla') return Math.max(0,Math.min(100,v));
+  if (k==='ticketsFechados') return Math.max(0,Math.min(100,v/cfg.volumeNota.ticketsFechados100*100));
+  if (k==='backlogTickets') {const {backlog100:a,backlog0:b}=cfg.volumeNota; return Math.max(0,Math.min(100,100-(v-a)/(b-a)*100));}
   if (k==='reab'){ const d=v/100,[a,b]=cfg.lim.reab; return d<=a?100:d>=b?0:((b-d)/(b-a))*100; }
   if (k==='tme'){ const [a,b]=cfg.lim.tme; return v<=a?100:v>=b?0:100-((v-a)/(b-a))*100; }
   if (k==='back'){ const d=v/100,[a,b]=cfg.lim.back; return d>=a?100:d<=b?0:((d-b)/(a-b))*100; }
@@ -216,27 +241,47 @@ function incluidos(row, cfg, nivel){   // os do nível + os opcionais que foram 
   const ap=aplicaveis(nivel,cfg);
   return KEYS.filter(k=>ap.includes(k) || (row && row[k]!==undefined && row[k]!==null && row[k]!=='' && !isNaN(row[k])));
 }
-function calcIES(row, cfg, nivel){
-  // N2: indicadores exibidos sem nota, pois não existem metas/escala oficiais para volume/backlog.
-  if (isN2(nivel)) return {ies:null,n:0,de:0};
-  // N3: nota proposta independente do IES N1, requer TODOS os 4 indicadores pontuáveis.
-  if (isN3(nivel)){
-    const n=N3_KEYS.filter(k=>temNumero(row && row[k])).length;
-    if(n<N3_KEYS.length) return {ies:null,n,de:N3_KEYS.length};
-    const ies=N3_KEYS.reduce((s,k)=>s+nota(k,row[k],cfg)*cfg.n3Pesos[k],0);
-    return {ies,n,de:N3_KEYS.length};
+function calcIES(row,cfg,nivel){
+  // N2 e N3: todos os indicadores definidos têm PESO, que é usado no cálculo.
+  // Campos em branco não viram zero: nota calculada com os campos disponíveis,
+  // redistribuindo proporcionalmente o peso e indicando claramente PARCIAL.
+  // Comparações individuais requerem cobertura 100%.
+  if(isN2(nivel)||isN3(nivel)){
+    const chaves=isN2(nivel)?N2_KEYS:N3_KEYS;
+    const pesos=isN2(nivel)?cfg.n2Pesos:cfg.n3Pesos;
+    // N3: FLR e SLA 1ª Resposta fazem parte da nota quando mensurados para atendimento direto.
+    // Campo faltante produz IES PARCIAL; nunca confundir falta de dado com 0.
+    const exigidos=chaves;
+    const totalPesoElegivel=exigidos.reduce((a,k)=>a+pesos[k],0);
+    let n=0,ponderada=0,pesoCoberto=0;
+    for(const k of chaves){
+      const nt=nota(k,row&&row[k],cfg);
+      if(nt===null||nt===undefined||!Number.isFinite(nt))continue;
+      n++; ponderada+=nt*pesos[k]; pesoCoberto+=pesos[k];
+    }
+    const ies=pesoCoberto?ponderada/pesoCoberto:null;
+    return {ies,n,de:exigidos.length,parcial:n<exigidos.length,cobertura:totalPesoElegivel?pesoCoberto/totalPesoElegivel*100:0};
   }
-  const ks=incluidos(row,cfg,nivel), soma=ks.reduce((t,k)=>t+cfg.pesos[k],0);
+  const ks=incluidos(row,cfg,nivel),soma=ks.reduce((t,k)=>t+cfg.pesos[k],0);
   let n=0,s=0;
-  for (const k of ks){ const nt=nota(k,row&&row[k],cfg); if(nt!==null){n++; s+=nt*cfg.pesos[k]/soma;} }
-  return n ? {ies:s,n,de:ks.length} : {ies:null,n:0,de:ks.length};
+  for(const k of ks){const nt=nota(k,row&&row[k],cfg);if(nt!==null){n++;s+=nt*cfg.pesos[k]/soma;}}
+  return n?{ies:s,n,de:ks.length,parcial:n<ks.length,cobertura:n/ks.length*100}:{ies:null,n:0,de:ks.length,parcial:true,cobertura:0};
+}
+// Para o acumulado anual, volume de tickets fechados é MOSTRADO como soma,
+// mas PONTUADO pela média mensal (evita premiar artificialmente mais meses lançados).
+function valoresParaNotaAnual(agregado){
+  if(!agregado||!agregado.valores)return null;
+  const valores={...agregado.valores};
+  if(temNumero(valores.ticketsFechados)&&agregado.qtd.ticketsFechados)
+    valores.ticketsFechados=valores.ticketsFechados/agregado.qtd.ticketsFechados;
+  return valores;
 }
 // </core>
 
 /* =====================================================================
    3) CAMADA DE DADOS (Back4App / Parse)
       Classe Analista: nome, nivel, slug, ativo
-      Classe Medicao : analistaId (slug), periodo (ex.: "2026-07"), flr, csat, reab, tme, sla, back, ticketsFechados, backlogTickets, slaPrimeira (opcional N3)
+      Classe Medicao : analistaId (slug), periodo (ex.: "2026-07"), flr, csat, reab, tme, sla, back, ticketsFechados, backlogTickets, slaPrimeira
       O acumulado do ano é calculado a partir dos meses; não é gravado no Back4App.
    ===================================================================== */
 const TEAM = [
@@ -297,7 +342,7 @@ function seedDemo(){
         r.ticketsFechados=Math.round(12+rnd()*25);
         r.backlogTickets=Math.round(4+rnd()*18);
       }
-      if(isN3(a.nivel)) r.slaPrimeira=+(88+rnd()*11).toFixed(1);
+      if(isN3(a.nivel)) {r.slaPrimeira=+(95+rnd()*5).toFixed(1); r.flr=+(85+rnd()*14).toFixed(1);}
       state.dados[a.id][p]=r;
     }
   }
@@ -412,7 +457,8 @@ function renderTime(){
     const dadosAnalista=state.dados[a.id]||{};
     const agregado=anual?consolidarAno(dadosAnalista,ui.periodo.slice(0,4)):null;
     const r=anual?agregado.valores:dadosAnalista[ui.periodo];
-    return {a,r,meses:agregado?agregado.meses:0,...calcIES(r,state.cfg,a.nivel)};
+    const rNota=anual?valoresParaNotaAnual(agregado):r;
+    return {a,r,rNota,meses:agregado?agregado.meses:0,...calcIES(rNota,state.cfg,a.nivel)};
   });
   const n2rows=rows.filter(x=>isN2(x.a.nivel));
   const n3rows=rows.filter(x=>isN3(x.a.nivel));
@@ -455,66 +501,52 @@ function renderTime(){
       options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{min:0,max:100}},plugins:{legend:{display:false}}}});
   }
 
-  if(n2rows.length){
-    const somaCampo=k=>{
-      const vals=n2rows.map(x=>x.r&&x.r[k]).filter(temNumero);
-      return vals.length?vals.reduce((s,v)=>s+Number(v),0):null;
-    };
-    root.append(h('div',{class:'msg ok'},'N2 — indicadores oficiais para acompanhamento; sem nota IES individual enquanto não houver metas e pesos validados para tickets fechados e backlog.'));
-    root.append(h('div',{class:'cards'},
-      card('Tickets fechados — N2',fmtCampo('ticketsFechados',somaCampo('ticketsFechados')),'soma dos analistas com lançamento'),
-      card('Backlog de tickets — N2',fmtCampo('backlogTickets',somaCampo('backlogTickets')),anual?'última posição informada de cada analista':'quantidade no período'),
-      card('Analistas N2',String(n2rows.length),'no filtro')));
-    const campos=[...N2_KEYS,...N2_CTX];
-    const tab=h('table',{},h('thead',{},h('tr',{},h('th',{},'Analista'),...campos.map(k=>h('th',{},LABEL[k])),...(anual?[h('th',{},'Meses lançados')]:[]))),
-      h('tbody',{},n2rows.map(x=>h('tr',{},h('td',{},x.a.nome),
-        ...campos.map(k=>h('td',{class:(k==='csat'||k==='reab')?metaClass(k,x.r&&x.r[k]):''},fmtCampo(k,x.r&&x.r[k]))),
-        ...(anual?[h('td',{},x.meses?`${x.meses}/12`:'—')]:[])))));
-    root.append(h('div',{class:'box'},h('h2',{},'Indicadores N2 — dados oficiais'),h('div',{class:'tw'},tab),
-      h('div',{class:'note'},'Primeiras quatro colunas: tickets fechados, CSAT, reaberturas e backlog de tickets. As três últimas (% SLA solução, % SLA backlog e P85) são somente contexto, não nota. Backlog de Tickets é QUANTIDADE; SLA Backlog é PERCENTUAL.')));
-    root.append(h('div',{class:'box'},h('h2',{},'Tickets fechados — N2'),h('div',{class:'canvas'},h('canvas',{id:'ch-n2-time'}))));
-    const validos=n2rows.filter(x=>temNumero(x.r&&x.r.ticketsFechados));
-    chart('ch-n2-time',{type:'bar',data:{labels:validos.map(x=>x.a.nome),datasets:[{label:'Tickets fechados',data:validos.map(x=>x.r.ticketsFechados),backgroundColor:css('--brand')}]},
-      options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{min:0,ticks:{precision:0}}},plugins:{legend:{display:false}}}});
-  }
+  if(n2rows.length) renderTimeNivel(root,n2rows,anual,'N2');
   if(n3rows.length) renderTimeN3(root,n3rows,anual);
 }
 
-function renderTimeN3(root,rows,anual){
-  const cfg=state.cfg;
-  const com=rows.filter(x=>x.ies!==null).sort((a,b)=>b.ies-a.ies);
-  const media=com.length?com.reduce((s,x)=>s+x.ies,0)/com.length:null;
-  const naMeta=com.filter(x=>x.ies>=cfg.metaIES).length;
-  root.append(h('div',{class:'box'},
-    h('h2',{},'N3 — atendimento prioritário e apoio técnico'),
-    h('p',{},'IES N3: proposta gerencial baseada em SLA de solução, SLA do backlog, CSAT e reaberturas. Todos são indicadores do painel oficial. Pesos e classificação não são oficiais; consulte a aba Regras do IES.'),
-    h('div',{class:'note'},'Os resultados não distinguem automaticamente o atendimento direto a clientes prioritários do apoio prestado ao N2. Atribua individualmente somente dados disponíveis nos relatórios.')));
+function renderTimeN3(root,rows,anual){renderTimeNivel(root,rows,anual,'N3');}
+function renderTimeNivel(root,rows,anual,nivel){
+  const c=state.cfg,keys=isN2(nivel)?N2_KEYS:N3_KEYS;
+  const pesos=isN2(nivel)?c.n2Pesos:c.n3Pesos;
+  const contexto=isN2(nivel)?N2_CTX:[];
+  const completos=rows.filter(x=>x.ies!==null&&!x.parcial).sort((a,b)=>b.ies-a.ies);
+  const parciais=rows.filter(x=>x.ies!==null&&x.parcial).sort((a,b)=>b.cobertura-a.cobertura);
+  const sem=rows.filter(x=>x.ies===null);
+  const all=[...completos,...parciais,...sem];
+  const media=completos.length?completos.reduce((s,x)=>s+x.ies,0)/completos.length:null;
+  const naMeta=completos.filter(x=>x.ies>=c.metaIES).length;
+  root.append(h('div',{class:'box'},h('h2',{},`${nivel} — IES individual com pesos propostos`),
+    h('p',{},`Todos os indicadores pontuáveis são oficiais do Painel de Suporte. Os PESOS e as metas numéricas para tickets fechados/backlog bruto são propostas gerenciais (não oficiais).`),
+    h('div',{class:'note'},'Nota com lançamento incompleto aparece como PARCIAL, sem entrar na média ou no ranking completo. N3: SLA 1ª resposta tem meta contratual de 99% e FLR deve ser extraído apenas para entradas diretas do N3, sem misturar apoio ao N2.')));
   root.append(h('div',{class:'cards'},
-    card('IES médio N3 (proposto)',fmt(media,1),com.length?`${com.length} analista(s) com 4/4 indicadores`:'sem medições completas'),
-    card(`N3 na referência de IES (≥ ${cfg.metaIES})`,com.length?`${naMeta}/${com.length}`:'—','referência do modelo anterior, não meta N3 oficial'),
-    card('Melhor resultado N3',com.length?fmt(com[0].ies,1):'—',com.length?com[0].a.nome:''),
-    card('Sem IES completo',String(rows.length-com.length),'exige os 4 indicadores pontuáveis')));
-  const campos=[...N3_KEYS,...N3_CTX];
-  const cab=['Analista','IES N3 (proposta)',...campos.map(k=>LABEL[k]),...(anual?['Meses lançados']:[])];
-  const table=h('table',{},h('thead',{},h('tr',{},...cab.map(t=>h('th',{},t)))),
-    h('tbody',{},[...com,...rows.filter(x=>x.ies===null)].map(x=>h('tr',{},
-      h('td',{},x.a.nome),h('td',{class:'ies '+iesClass(x.ies)},fmt(x.ies,1)),
-      ...campos.map(k=>h('td',{class:N3_KEYS.includes(k)?metaClass(k,x.r&&x.r[k],'N3'):'',title:N3_KEYS.includes(k)?tip(k,x.r&&x.r[k],'N3'):''},fmtCampo(k,x.r&&x.r[k]))),
+    card(`IES médio completo ${nivel}`,fmt(media,1),`${completos.length} de ${rows.length} analista(s) com todos os dados`),
+    card('Dentro da referência IES',completos.length?`${naMeta}/${completos.length}`:'—',`Referência anterior ≥ ${c.metaIES}; não é meta oficial do nível`),
+    card('IES parciais',String(parciais.length),'visíveis na tabela, sem comparação'),
+    card('Sem nota',String(sem.length),'sem nenhum indicador pontuável informado')));
+  const campos=[...keys,...contexto];
+  const cab=['Analista',`IES ${nivel}`,'Cobertura',...campos.map(k=>LABEL[k]),...(anual?['Meses lançados']:[])];
+  const tabela=h('table',{},h('thead',{},h('tr',{},...cab.map(t=>h('th',{},t)))),
+    h('tbody',{},all.map(x=>h('tr',{},
+      h('td',{},x.a.nome),
+      h('td',{class:'ies '+(!x.parcial?iesClass(x.ies):'')},fmt(x.ies,1)+(x.parcial&&x.ies!==null?' (parcial)':'')),
+      h('td',{},x.ies!==null?`${Math.round(x.cobertura)}% · ${x.n}/${x.de}`:'—'),
+      ...campos.map(k=>h('td',{class:keys.includes(k)?metaClass(k,x.rNota&&x.rNota[k],nivel):''},fmtCampo(k,x.r&&x.r[k]))),
       ...(anual?[h('td',{},x.meses?`${x.meses}/12`:'—')]:[])))));
-  root.append(h('div',{class:'box'},h('h2',{},'Resultados N3 — indicadores oficiais'),h('div',{class:'tw'},table),
-    h('div',{class:'note'},'Peso no IES N3: SLA Solução 35%; SLA Backlog 25%; CSAT 25%; Reabertos 15%. Tickets fechados, backlog bruto, P85 e SLA 1ª Resposta ficam apenas como contexto. O IES N3 só aparece com os 4 indicadores lançados.')));
-  root.append(h('div',{class:'box'},h('h2',{},'IES N3 por analista'),h('div',{class:'canvas',style:'height:260px'},h('canvas',{id:'ch-n3-time'}))));
-  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES médio N3 — ${ui.ano}`),h('div',{class:'canvas',style:'height:260px'},h('canvas',{id:'ch-n3-evo'}))));
+  root.append(h('div',{class:'box'},h('h2',{},`Detalhamento ${nivel} — IES e indicadores`),h('div',{class:'tw'},tabela),
+    h('div',{class:'note'},`Pesos no ${nivel}: ${keys.map(k=>LABEL[k]+' '+Math.round(pesos[k]*100)+'%').join(' · ')}. Referências e fórmulas na aba Regras do IES.`)));
+  root.append(h('div',{class:'box'},h('h2',{},`IES ${nivel} por analista — notas completas`),h('div',{class:'canvas',style:'height:280px'},h('canvas',{id:`ch-${nivel}-time`}))));
+  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES médio completo ${nivel} — ${ui.ano}`),h('div',{class:'canvas',style:'height:250px'},h('canvas',{id:`ch-${nivel}-evo`}))));
   const evo=Array.from({length:12},(_,i)=>{
     const p=`${ui.ano}-${String(i+1).padStart(2,'0')}`;
-    const v=rows.map(x=>calcIES((state.dados[x.a.id]||{})[p],cfg,'N3').ies).filter(temNumero);
-    return v.length?+(v.reduce((s,x)=>s+x,0)/v.length).toFixed(2):null;
+    const notas=rows.map(x=>calcIES((state.dados[x.a.id]||{})[p],c,nivel)).filter(x=>x.ies!==null&&!x.parcial);
+    return notas.length?notas.reduce((s,x)=>s+x.ies,0)/notas.length:null;
   });
-  chart('ch-n3-time',{type:'bar',data:{labels:com.map(x=>x.a.nome),datasets:[{label:'IES N3',data:com.map(x=>+x.ies.toFixed(2)),backgroundColor:com.map(x=>bandColor(x.ies))}]},
+  chart(`ch-${nivel}-time`,{type:'bar',data:{labels:completos.map(x=>x.a.nome),datasets:[{label:`IES ${nivel}`,data:completos.map(x=>+x.ies.toFixed(2)),backgroundColor:completos.map(x=>bandColor(x.ies))}]},
     options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{min:0,max:100}},plugins:{legend:{display:false}}}});
-  chart('ch-n3-evo',{type:'line',data:{labels:MESES,datasets:[
-    {label:'IES N3 médio',data:evo,borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.2},
-    {label:`Referência IES ${cfg.metaIES}`,data:MESES.map(()=>cfg.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
+  chart(`ch-${nivel}-evo`,{type:'line',data:{labels:MESES,datasets:[
+    {label:`IES médio completo ${nivel}`,data:evo,borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},
+    {label:`Referência ${c.metaIES}`,data:MESES.map(()=>c.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
     options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}}}});
 }
 function card(k,v,s){ return h('div',{class:'card'},h('div',{class:'k'},k),h('div',{class:'v'},v),h('div',{class:'s'},s||'')); }
@@ -551,63 +583,42 @@ function renderAnalista(){
     options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
 }
 
-function renderAnalistaN2(root,a,d){
+function renderAnalistaN2(root,a,d){renderAnalistaNivel(root,a,d,'N2');}
+function renderAnalistaN3(root,a,d){renderAnalistaNivel(root,a,d,'N3');}
+function renderAnalistaNivel(root,a,d,nivel){
+  const c=state.cfg,keys=isN2(nivel)?N2_KEYS:N3_KEYS;
+  const contexto=isN2(nivel)?N2_CTX:[];
+  const pesos=isN2(nivel)?c.n2Pesos:c.n3Pesos;
   const ms=Array.from({length:12},(_,i)=>`${ui.ano}-${String(i+1).padStart(2,'0')}`);
-  const an=consolidarAno(d,ui.ano); const v=an.valores||{};
-  root.append(h('div',{class:'msg ok'},'N2: resultados oficiais sem IES numérico individual. SLA e P85 são apresentados apenas como contexto.'));
+  const an=consolidarAno(d,ui.ano),av=an.valores||{};
+  const acum=calcIES(valoresParaNotaAnual(an),c,nivel);
+  const notas=ms.map(p=>calcIES(d[p],c,nivel));
+  const completos=notas.filter(x=>x.ies!==null&&!x.parcial);
+  const mesesComAlgumaNota=notas.filter(x=>x.ies!==null).length;
+  root.append(h('div',{class:'msg '+(acum.parcial?'warn':'ok')},
+    `IES ${nivel} com pesos gerenciais propostos. ${acum.parcial?'A nota anual é PARCIAL: confira os campos faltantes.':'Indicadores pontuáveis completos.'} SLA de chamados herdados e indicadores de tempo exigem análise gerencial do contexto.`));
   root.append(h('div',{class:'cards'},
-    card('Tickets Fechados — ano',fmtCampo('ticketsFechados',v.ticketsFechados),'soma dos meses lançados'),
-    card('Backlog de Tickets',fmtCampo('backlogTickets',v.backlogTickets),'último mês com valor informado'),
-    card('CSAT — média mensal',fmt(v.csat,1),an.meses?'sem ponderar pela quantidade de respostas':'sem dados'),
-    card('Reabertos — média mensal',fmt(v.reab,1),an.meses?'sem ponderar pelos tickets fechados':'sem dados'),
-    card('Meses com lançamento',String(an.meses),'no ano selecionado')));
-  const campos=[...N2_KEYS,...N2_CTX];
-  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Utilização'),...MESES.map(m=>h('th',{},m)),h('th',{},'Ano'))),
-    h('tbody',{},campos.map(k=>h('tr',{},
-      h('td',{},FULL[k]),
-      h('td',{},N2_KEYS.includes(k)?'Indicador N2':'Contexto'),
-      ...ms.map(p=>{const x=d[p]&&d[p][k];return h('td',{class:(k==='csat'||k==='reab')?metaClass(k,x):''},fmtCampo(k,x));}),
-      h('td',{class:(k==='csat'||k==='reab')?metaClass(k,v[k]):''},fmtCampo(k,v[k]))))));
-  root.append(h('div',{class:'box'},h('h2',{},`Indicadores oficiais — ${a.nome}`),h('div',{class:'tw'},t),
-    h('div',{class:'note'},'Ano: tickets fechados = soma; backlog = último mês informado; CSAT, reabertos, SLA e P85 = médias simples dos meses com dados. Taxas anuais oficiais exigiriam numeradores e denominadores mensais.')));
-  root.append(h('div',{class:'box'},h('h2',{},'Evolução de tickets fechados'),h('div',{class:'canvas'},h('canvas',{id:'ch-n2-fechados'}))));
-  root.append(h('div',{class:'box'},h('h2',{},'Evolução do backlog de tickets'),h('div',{class:'canvas'},h('canvas',{id:'ch-n2-backlog'}))));
-  for(const [campo,id,nome] of [['ticketsFechados','ch-n2-fechados','Tickets Fechados'],['backlogTickets','ch-n2-backlog','Backlog de Tickets']]){
-    chart(id,{type:'bar',data:{labels:MESES,datasets:[{label:nome,data:ms.map(p=>{const x=d[p]&&d[p][campo];return temNumero(x)?Number(x):null;}),backgroundColor:css('--brand')}]},
-      options:{maintainAspectRatio:false,scales:{y:{min:0,ticks:{precision:0}}},plugins:{legend:{display:false}}}});
-  }
-}
-
-function renderAnalistaN3(root,a,d){
-  const ms=Array.from({length:12},(_,i)=>`${ui.ano}-${String(i+1).padStart(2,'0')}`);
-  const an=consolidarAno(d,ui.ano), av=an.valores||{};
-  const c=state.cfg, acum=calcIES(an.valores,c,'N3');
-  const serie=ms.map(p=>calcIES(d[p],c,'N3').ies);
-  const validos=serie.filter(temNumero);
-  root.append(h('div',{class:'msg ok'},'N3: IES proposto para atendimento prioritário. Somente SLA de solução, SLA do backlog, CSAT e reabertos compõem a nota; os outros indicadores oficiais são contexto.'));
-  root.append(h('div',{class:'cards'},
-    card(`IES N3 acumulado — ${ui.ano}`,fmt(acum.ies,1),acum.ies===null?`Incompleto: ${acum.n}/4 indicadores pontuáveis`:`${an.meses} mês(es) com lançamento · 4/4 indicadores`),
-    card('SLA Suporte — média mensal',fmt(av.sla,1),'>95% é a meta oficial do painel'),
-    card('SLA Backlog — média mensal',fmt(av.back,1),'percentual, não quantidade'),
-    card('CSAT — média mensal',fmt(av.csat,1),'>93% é a meta oficial do painel'),
-    card('Tickets fechados — ano',fmtCampo('ticketsFechados',av.ticketsFechados),'contexto; soma dos meses'),
-    card('Backlog de Tickets',fmtCampo('backlogTickets',av.backlogTickets),'contexto; último mês informado')));
-  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES proposto — ${a.nome}`),h('div',{class:'canvas'},h('canvas',{id:'ch-n3-analista'}))));
-  const campos=[...N3_KEYS,...N3_CTX];
-  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Peso N3'),h('th',{},'Benchmark / aplicação'),...MESES.map(m=>h('th',{},m)),h('th',{},'Ano'))),
+    card(`IES ${nivel} — ${ui.ano}`,fmt(acum.ies,1),acum.ies===null?'nenhum dado pontuável':`${acum.parcial?'PARCIAL · ':'Completo · '}${acum.n}/${acum.de} indicadores · cobertura ${Math.round(acum.cobertura)}%`),
+    card('Tickets Fechados — ano',fmtCampo('ticketsFechados',av.ticketsFechados),'Soma dos meses; nota usa média mensal'),
+    card('Backlog de Tickets',fmtCampo('backlogTickets',av.backlogTickets),'Último mês com valor informado'),
+    card('Meses com nota',`${mesesComAlgumaNota}/12`,`${completos.length} com todos os campos pontuáveis`)));
+  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES ${nivel} — ${a.nome}`),h('div',{class:'canvas'},h('canvas',{id:`ch-${nivel}-analista`}))));
+  const campos=[...keys,...contexto];
+  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},`Peso ${nivel}`),h('th',{},'Benchmark'),...MESES.map(m=>h('th',{},m)),h('th',{},'Ano'))),
     h('tbody',{},[
-      ...campos.map(k=>h('tr',{},h('td',{},FULL[k]),
-        h('td',{},N3_KEYS.includes(k)?`${Math.round(c.n3Pesos[k]*100)}%`:'0% · contexto'),
-        h('td',{style:'text-align:left;white-space:normal;min-width:210px'},N3_KEYS.includes(k)?benchPara(k,c,'N3').texto:'Acompanhamento sem peso no IES'),
-        ...ms.map(p=>{const v=d[p]&&d[p][k];return h('td',{class:N3_KEYS.includes(k)?metaClass(k,v,'N3'):''},fmtCampo(k,v));}),
-        h('td',{class:N3_KEYS.includes(k)?metaClass(k,av[k],'N3'):''},fmtCampo(k,av[k])))),
-      h('tr',{},h('td',{class:'ies'},'IES N3 (proposta)'),h('td',{},'100%'),h('td',{},'Exige 4/4 indicadores; referência do modelo ≥ '+c.metaIES),
-        ...serie.map(v=>h('td',{class:'ies '+iesClass(v)},fmt(v,1))),h('td',{class:'ies '+iesClass(acum.ies)},fmt(acum.ies,1)))
+      ...campos.map(k=>h('tr',{},
+        h('td',{},FULL[k]),h('td',{},keys.includes(k)?`${Math.round(pesos[k]*100)}%`:'0% · contexto'),
+        h('td',{style:'text-align:left;white-space:normal;min-width:220px'},keys.includes(k)?benchPara(k,c,nivel).texto:'Acompanhamento, não pontua'),
+        ...ms.map(p=>{const v=d[p]&&d[p][k];return h('td',{class:keys.includes(k)?metaClass(k,v,nivel):''},fmtCampo(k,v));}),
+        h('td',{class:keys.includes(k)?metaClass(k,(k==='ticketsFechados'?valoresParaNotaAnual(an)?.ticketsFechados:av[k]),nivel):''},fmtCampo(k,av[k])))),
+      h('tr',{},h('td',{class:'ies'},`IES ${nivel}`),h('td',{},'100%'),h('td',{},'Notas incompletas são parciais; não entram no ranking'),
+        ...notas.map(x=>h('td',{class:'ies '+(!x.parcial?iesClass(x.ies):'')},fmt(x.ies,1)+(x.ies!==null&&x.parcial?'*':''))),
+        h('td',{class:'ies '+(!acum.parcial?iesClass(acum.ies):'')},fmt(acum.ies,1)+(acum.ies!==null&&acum.parcial?'*':'')))
     ]));
-  root.append(h('div',{class:'box'},h('h2',{},'Indicadores N3 — mês a mês'),h('div',{class:'tw'},t),
-    h('div',{class:'note'},'As médias anuais de taxas são médias simples dos meses informados (não taxas oficiais consolidadas por ticket). O IES anual aplica os pesos às médias desses 4 indicadores. Confira pesos, benchmark e fórmula na aba Regras do IES.')));
-  chart('ch-n3-analista',{type:'line',data:{labels:MESES,datasets:[
-    {label:'IES N3',data:serie,borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},
+  root.append(h('div',{class:'box'},h('h2',{},`Indicadores ${nivel} — mês a mês`),h('div',{class:'tw'},t),
+    h('div',{class:'note'},'* Nota parcial: pesos dos campos com valores são redistribuídos até 100% apenas para mostrar uma referência, sem comparação ou classificação. O acumulado usa média mensal das taxas, a soma de tickets fechados para exibição e média de tickets fechados/mês para pontuar.')));
+  chart(`ch-${nivel}-analista`,{type:'line',data:{labels:MESES,datasets:[
+    {label:`IES ${nivel} (inclui notas parciais)`,data:notas.map(x=>x.ies),borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},
     {label:`Referência ${c.metaIES}`,data:MESES.map(()=>c.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
     options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}}}});
 }
@@ -645,7 +656,7 @@ function renderLancar(){
     return tr;
   }));
   const msg=h('div',{id:'l-msg'});
-  const ta=h('textarea',{placeholder:'N1: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog\nN2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets\nN3: Analista; SLA Solução; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85; SLA 1ª Resposta\nSepare por TAB ou ponto e vírgula.'});
+  const ta=h('textarea',{placeholder:'N1: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog\nN2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets\nN3: Analista; SLA 1ª Resposta; SLA Solução; FLR; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85\nSepare por TAB ou ponto e vírgula.'});
   const aplicar=()=>{
     const porNome=Object.fromEntries(state.analistas.map(a=>[norm(a.nome),a]));
     let ok=0; const sem=[];
@@ -665,7 +676,7 @@ function renderLancar(){
   };
   root.append(h('div',{class:'box'},h('h2',{},'Lançamento mensal — N1, N2 e N3'),
     h('div',{class:'bar'},select('l-pe','Período',periodosLancamento.map(p=>({v:p.id,t:p.label})),ui.lPeriodo,v=>{ui.lPeriodo=v;render();})),
-    h('div',{class:'note',style:'margin:0 0 8px'},'N2: Tickets Fechados, CSAT, Reabertos e Backlog de Tickets; SLA Solução, SLA Backlog e P85 são contexto. N3: SLA Solução, SLA Backlog, CSAT e Reabertos pontuam; Tickets Fechados, Backlog de Tickets, P85 e SLA de 1ª Resposta são contexto (opcionais). Valores em % sem símbolo, contagens inteiras. Célula vazia = não lançado.'),
+    h('div',{class:'note',style:'margin:0 0 8px'},'N2: Tickets Fechados, CSAT, Reabertos e Backlog de Tickets pontuam; SLA Solução, SLA Backlog e P85 ficam como contexto. N3: nove indicadores pontuam, incluindo FLR e SLA 1ª Resposta (meta contratual 99%). Use o FLR apenas para chamados que entram diretamente no N3, se disponíveis nesse recorte. Valores em % sem símbolo; contagens inteiras. Célula vazia = nota parcial, não zero.'),
     h('div',{class:'tw'},h('table',{class:'lote'},h('thead',{},h('tr',{},h('th',{},'Analista'),...ALL_KEYS.map(k=>h('th',{},LABEL[k])))),tbody)),
     msg,
     h('div',{style:'margin-top:10px;display:flex;gap:8px'},h('button',{class:'btn',onclick:async e=>{
@@ -691,61 +702,65 @@ function renderLancar(){
       catch(err){msg.replaceChildren(h('div',{class:'msg bad'},'Não foi possível salvar: '+(err.message||err)));e.target.disabled=false;}
     }},'Salvar período'))),
     h('div',{class:'box'},h('h2',{},'Colar do Excel'),
-      h('div',{class:'note'},'Ordem N1/N1-N2 Peticiona: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog. Ordem N2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets. Ordem N3: Analista; SLA Solução; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85; SLA 1ª Resposta. Valores de contexto podem ser preenchidos diretamente na tabela.'),
+      h('div',{class:'note'},'Ordem N1/N1-N2 Peticiona: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog. Ordem N2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets. Ordem N3: Analista; SLA 1ª Resposta; SLA Solução; FLR; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85. Valores de contexto podem ser preenchidos diretamente na tabela.'),
       ta,h('div',{style:'margin-top:8px'},h('button',{class:'btn ghost',onclick:aplicar},'Preencher a tabela com o que colei'))));
 }
 
 function renderRegras(){
-  const root=$('#tab-regras'); root.replaceChildren();
+  const root=$('#tab-regras');root.replaceChildren();
   const c=state.cfg;
-  const pesos = obj => Object.values(obj).reduce((s,v)=>s+v,0);
+  const soma=obj=>Object.values(obj).reduce((a,b)=>a+b,0);
   const formula={
-    flr:'Nota = FLR informado (0 a 100 pontos).',
-    csat:'Nota = CSAT informado (0 a 100 pontos).',
-    sla:'Nota = % SLA Solução informado (0 a 100 pontos).',
-    slaPrimeira:'Indicador de contexto no N3; sem pontuação individual neste modelo.',
-    reab:`Nota invertida e linear: ≤ ${(c.lim.reab[0]*100).toFixed(0)}% = 100 pts; ≥ ${(c.lim.reab[1]*100).toFixed(0)}% = 0 pt; no intervalo, interpolação linear.`,
-    tme:`Nota invertida e linear (modelo N1): ≤ ${c.lim.tme[0]} dias = 100 pts; ≥ ${c.lim.tme[1]} dias = 0 pt.`,
-    back:`Nota linear: ≥ ${Math.round(c.lim.back[0]*100)}% = 100 pts; ≤ ${Math.round(c.lim.back[1]*100)}% = 0 pt; no intervalo, interpolação linear.`,
-    ticketsFechados:'Quantidade. Sem nota: o painel oficial não define produtividade mínima por analista.',
-    backlogTickets:'Quantidade em aberto. Sem nota: o painel oficial não define meta individual de volume.'
+    flr:'Nota = percentual FLR informado (0–100).',
+    csat:'Nota = percentual CSAT informado (0–100).',
+    sla:'Nota = percentual de SLA Solução informado (0–100).',
+    slaPrimeira:'N3 — PROPOSTA DE NOTA PARA META CONTRATUAL 99%: ≤95% = 0 pontos; 96% = 25; 97% = 50; 98% = 75; ≥99% = 100. Interpolação linear entre 95% e 99%; acima de 99% fica em 100 pontos.',
+    reab:`Nota = 100 quando ≤ ${(c.lim.reab[0]*100).toFixed(0)}%; 0 quando ≥ ${(c.lim.reab[1]*100).toFixed(0)}%; interpolação linear entre esses limites.`,
+    tme:`Nota = 100 quando ≤ ${c.lim.tme[0]} dias; 0 quando ≥ ${c.lim.tme[1]} dias; interpolação linear no intervalo.`,
+    back:`Nota = 100 quando ≥ ${Math.round(c.lim.back[0]*100)}%; 0 quando ≤ ${Math.round(c.lim.back[1]*100)}%; interpolação linear no intervalo.`,
+    ticketsFechados:`PROPOSTA: 0 tickets/mês = 0 ponto; ≥ ${c.volumeNota.ticketsFechados100} tickets/mês = 100 pontos; proporcional entre eles. No ano, usa média mensal.`,
+    backlogTickets:`PROPOSTA: ≤ ${c.volumeNota.backlog100} tickets = 100 pontos; ≥ ${c.volumeNota.backlog0} tickets = 0 ponto; interpolação linear entre esses limites.`
   };
-  function regra(k,peso,nivel,pontua){
-    const bm=benchPara(k,c,nivel);
-    const bench=bm?bm.texto:'Sem benchmark individual definido no painel oficial; usar como contexto.';
-    return h('tr',{},
-      h('td',{style:'text-align:left;white-space:normal;min-width:175px'},FULL[k]),
-      h('td',{},pontua?`${Math.round(peso*100)}%`:'0% · contexto'),
-      h('td',{style:'text-align:left;white-space:normal;min-width:265px'},bench),
-      h('td',{style:'text-align:left;white-space:normal;min-width:280px'},pontua?formula[k]:`Não compõe o IES deste nível. ${formula[k]}`));
+  function linha(k,peso,nivel){
+    const b=benchPara(k,c,nivel);
+    return h('tr',{},h('td',{style:'text-align:left;white-space:normal;min-width:185px'},FULL[k]),
+      h('td',{},peso?`${Math.round(peso*100)}%`:'0% · contexto'),
+      h('td',{style:'text-align:left;white-space:normal;min-width:270px'},b?b.texto:'Sem faixa definida'),
+      h('td',{style:'text-align:left;white-space:normal;min-width:280px'},peso?formula[k]:`Não compõe IES individual: ${formula[k]}`));
   }
-  const table=(rows)=>h('div',{class:'tw'},h('table',{},h('thead',{},h('tr',{},...['Indicador','Peso','Benchmark','Nota (0–100) / regra'].map(x=>h('th',{},x)))),h('tbody',{},rows)));
-  root.append(h('div',{class:'box'},h('h2',{},'Como ler as regras e as notas'),
-    h('p',{},`IES = soma de (nota do indicador × peso). O referencial geral de IES ≥ ${c.metaIES} é mantido do modelo anterior; não é uma meta oficial específica para N2 ou N3 no PDF do Projuris.`),
-    h('p',{},'Os indicadores são os do Painel de Suporte — V1 do Projuris. O painel oficial registra meta de SLA Suporte acima de 95% e CSAT acima de 93%. Não publica pesos próprios de IES por nível. Pesos do N3 e faixas de cor complementares são PROPOSTAS de gestão, não regras oficiais.'),
-    h('p',{},'Não comparar diretamente ranking N1 × N3: cada nível tem pesos e atribuições diferentes. N2 não tem nota individual consolidada enquanto não houver parâmetros aprovados para produtividade e backlog.'),
-    h('div',{class:'note'},'No N3, a nota só é exibida se os quatro indicadores pontuáveis estiverem informados. Indicador sem dado não é tratado como zero nem redistribui pesos.')));
-  root.append(h('div',{class:'box'},h('h2',{},'N1 e N1/N2 Peticiona — regra anterior (mantida)'),
-    h('p',{},'Os seis indicadores e pesos do HTML anterior permanecem como estavam. Indicadores não lançados deixam o resultado parcial, conforme a regra preexistente.'),
-    table(KEYS.map(k=>regra(k,c.pesos[k],'N1',true))),
-    h('div',{class:'note'},`Soma dos pesos: ${(pesos(c.pesos)*100).toFixed(0)}%. Benchmarks e limites desta seção são do modelo do IES anterior, não todos metas oficiais do PDF.`)));
-  root.append(h('div',{class:'box'},h('h2',{},'N2 — somente indicadores oficiais, sem nota consolidada'),
-    h('p',{},'Tickets Fechados, CSAT, Reabertos e Backlog de Tickets seguem visíveis. Não há peso individual aprovado nem benchmark oficial para converter quantidades de tickets em pontos; por isso o painel não inventa um IES N2.'),
-    table([...N2_KEYS,...N2_CTX].map(k=>regra(k,0,'N2',false))),
-    h('div',{class:'note'},'O benchmark exibido para CSAT, Reabertos, SLA e P85 é referência para leitura, não um peso de avaliação do N2. SLA de solução, SLA do backlog e P85 são apenas contexto.')));
-  root.append(h('div',{class:'box'},h('h2',{},'N3 — proposta de IES para clientes prioritários'),
-    h('p',{},'Quatro indicadores do painel oficial entram no IES N3. Os pesos abaixo são sugeridos para sua validação e totalizam 100%. O SLA de solução é relevante para os clientes com prazo contratual, mas deve ser analisado com cautela quando o chamado já chegou vencido.'),
-    table([...N3_KEYS.map(k=>regra(k,c.n3Pesos[k],'N3',true)),...N3_CTX.map(k=>regra(k,0,'N3',false))]),
-    h('div',{class:'note'},`Soma dos pesos pontuáveis do N3: ${(pesos(c.n3Pesos)*100).toFixed(0)}%. % SLA 1ª Resposta é opcional, aplicável aos chamados recebidos diretamente; sua coluna no Back4App é opcional. Não há medida oficial de contribuição do N3 a chamados ainda atribuídos ao N2.`)));
-  root.append(h('div',{class:'box'},h('h2',{},'Exemplo de cálculo do IES N3'),
-    h('p',{},'SLA Solução = 96%, SLA Backlog = 80%, CSAT = 95%, Reabertos = 3%.'),
-    h('p',{},'Notas: SLA 96 pontos; SLA Backlog 75 pontos; CSAT 95 pontos; Reabertos 100 pontos.'),
-    h('p',{},'IES N3 = (96 × 35%) + (75 × 25%) + (95 × 25%) + (100 × 15%) = 91,1 pontos.'),
-    h('div',{class:'note'},'Exemplo ilustrativo de aplicação da proposta; não representa resultados da equipe.')));
+  function tabela(rows){return h('div',{class:'tw'},h('table',{},h('thead',{},h('tr',{},...['Indicador oficial','Peso','Benchmark','Nota / regra de cálculo'].map(t=>h('th',{},t)))),h('tbody',{},rows)));}
+  root.append(h('div',{class:'box'},h('h2',{},'Como os pesos e as notas funcionam'),
+    h('p',{},'Todos os indicadores estão no Painel de Suporte — V1 do Projuris. Os pesos N2/N3, os limites para quantidades e as faixas complementares são PROPOSTAS DE GESTÃO: não constam como metas oficiais do painel.'),
+    h('p',{},`Cada indicador recebe nota de 0 a 100. IES = soma (nota × peso), em escala de 0 a 100. Referência anterior do modelo: IES ≥ ${c.metaIES}; não é uma meta oficial específica para N2/N3.`),
+    h('p',{},'Se faltar um indicador obrigatório, aparece IES PARCIAL, com os pesos presentes redistribuídos proporcionalmente apenas para referência. N3: FLR e SLA de 1ª Resposta são pontuáveis; preencha ambos para nota completa. IES parcial não entra na média nem no ranking completo.'),
+    h('p',{},'N2 não pontua por FLR, FCR ou SLA de primeira resposta. No N3, a meta contratual de SLA de primeira resposta é 99% (informada pela gestora). FLR N3 somente quando o BI puder filtrar os chamados recebidos diretamente pelo terceiro nível e concluídos sem escalonamento; não confundir com o apoio prestado ao N2.')));
+  root.append(h('div',{class:'box'},h('h2',{},'N1 e N1/N2 Peticiona — regras anteriores (mantidas)'),
+    tabela(KEYS.map(k=>linha(k,c.pesos[k],'N1'))),
+    h('div',{class:'note'},`Total: ${Math.round(soma(c.pesos)*100)}%. Benchmarks e a regra de pontuação são do modelo IES anterior.`)));
+  root.append(h('div',{class:'box'},h('h2',{},'N2 — indicadores oficiais, com pesos e nota'),
+    h('p',{},'A avaliação do N2 valoriza qualidade e produção. SLA de solução, SLA de backlog e P85 continuam visíveis como contexto, sem pontuar, porque os chamados podem chegar já vencidos ou depender do desenvolvimento.'),
+    tabela([...N2_KEYS.map(k=>linha(k,c.n2Pesos[k],'N2')),...N2_CTX.map(k=>linha(k,0,'N2'))]),
+    h('div',{class:'note'},`Total de pesos N2: ${Math.round(soma(c.n2Pesos)*100)}%. Metas de tickets fechados e backlog bruto são referências provisórias que devem ser calibradas com o histórico.`)));
+  root.append(h('div',{class:'box'},h('h2',{},'N3 — indicadores oficiais, com pesos e nota'),
+    h('p',{},'O N3 atende clientes prioritários com SLA de primeira resposta contratado de 99%; este indicador possui maior peso e pontuação gerencial mais exigente. FLR também pontua quando o BI mede os chamados recebidos diretamente pelo N3 e solucionados sem escalonamento. Pesos e nota escalonada são propostas de gestão; a meta de 99% é o contrato informado pela gestora.'),
+    tabela(N3_KEYS.map(k=>linha(k,c.n3Pesos[k],'N3'))),
+    h('div',{class:'note'},`Total de pesos N3: ${Math.round(soma(c.n3Pesos)*100)}%. Para IES completo, preencha os nove indicadores; se faltar FLR ou SLA 1ª resposta, a nota será PARCIAL. Meta contratual SLA de 1ª resposta: 99%.`))); 
+  function exemplo(nivel,dados){
+    const ks=isN2(nivel)?N2_KEYS:N3_KEYS,pesos=isN2(nivel)?c.n2Pesos:c.n3Pesos;
+    const resultado=calcIES(dados,c,nivel);
+    return h('div',{class:'box'},h('h2',{},`Exemplo de cálculo do IES ${nivel} — dados fictícios`),
+      tabela(ks.map(k=>h('tr',{},
+        h('td',{style:'text-align:left'},FULL[k]),
+        h('td',{},Math.round(pesos[k]*100)+'%'),
+        h('td',{},fmtCampo(k,dados[k])+(k==='ticketsFechados'?' tickets/mês':k==='backlogTickets'?' tickets':'')),
+        h('td',{},`${fmt(nota(k,dados[k],c),1)} pts × ${Math.round(pesos[k]*100)}% = ${fmt(nota(k,dados[k],c)*pesos[k],2)} pontos`)))),
+      h('p',{},`IES ${nivel} do exemplo = ${fmt(resultado.ies,2)} pontos (100% dos indicadores preenchidos).`));
+  }
+  root.append(exemplo('N2',{ticketsFechados:18,csat:94,reab:4,backlogTickets:8}));
+  root.append(exemplo('N3',{slaPrimeira:98,sla:96,flr:96,back:80,csat:95,reab:3,ticketsFechados:18,backlogTickets:8,tme:9}));
   root.append(h('div',{class:'box'},h('h2',{},'Acumulado anual — todos os níveis'),
-    h('p',{},'O ano é calculado automaticamente com os dados mensais lançados, sem gravar um lançamento ANO no banco.'),
-    h('p',{},'Tickets fechados = soma dos meses informados; backlog de tickets = último volume mensal; percentuais, SLA e P85 = médias aritméticas dos meses com valor. As médias de percentuais não equivalem às taxas oficiais anuais calculadas a partir dos registros individuais.'),
-    h('p',{},'O IES N3 anual aplica os pesos às médias mensais dos quatro indicadores. Se qualquer indicador estiver ausente no ano inteiro, o IES N3 anual permanece sem nota.')));
+    h('p',{},'Os dados mensais são consolidados no navegador. Tickets fechados são mostrados como soma anual, mas sua nota considera a média mensal nos meses em que o indicador foi lançado. Backlog bruto corresponde ao último valor mensal informado.'),
+    h('p',{},'Percentuais, SLA e P85: médias simples dos meses com valor. Uma média de percentuais não corresponde à taxa oficial consolidada por ticket.')));
 }
 
 function render(){
