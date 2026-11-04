@@ -193,7 +193,8 @@ function calcIES(row, cfg, nivel){
 /* =====================================================================
    3) CAMADA DE DADOS (Back4App / Parse)
       Classe Analista: nome, nivel, slug, ativo
-      Classe Medicao : analistaId (slug), periodo ("2026-07" ou "2026-ANO"), flr, csat, reab, tme, sla, back
+      Classe Medicao : analistaId (slug), periodo (ex.: "2026-07"), flr, csat, reab, tme, sla, back
+      O acumulado do ano é calculado a partir dos meses; não é gravado no Back4App.
    ===================================================================== */
 const TEAM = [
  ["Gustavo Gaeta","N1"],["Humberto Ferro","N1"],["Lucas Rodrigues","N1"],["Maria Vitória Muniz","N1"],
@@ -213,6 +214,31 @@ for (const y of [OPTIONS.anoAtual, OPTIONS.anoAtual-1]){
 const DEMO = new URLSearchParams(location.search).has('demo');
 const CONFIGURED = !!B4A.appId && !B4A.appId.startsWith('COLE') && !!B4A.jsKey && !B4A.jsKey.startsWith('COLE');
 const state = {cfg:DEFAULT_CFG, analistas:[], dados:{}, objs:{}, anaObjs:{}, user:null};
+
+// Consolida os 12 meses de um ano, usando apenas valores realmente lançados.
+// Cada mês tem o mesmo peso dentro de cada indicador; zeros lançados são válidos.
+// Não usa registros antigos "YYYY-ANO", pois o anual é calculado, não lançado.
+function consolidarAno(dadosAnalista, ano){
+  const somas = {}, qtd = {};
+  let meses = 0;
+  for(let m=1; m<=12; m++){
+    const periodo = `${ano}-${String(m).padStart(2,'0')}`;
+    const linha = dadosAnalista[periodo];
+    if(!linha) continue;
+    let temValor = false;
+    for(const k of KEYS){
+      const v = linha[k];
+      if(v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) continue;
+      somas[k] = (somas[k] || 0) + Number(v);
+      qtd[k] = (qtd[k] || 0) + 1;
+      temValor = true;
+    }
+    if(temValor) meses++;
+  }
+  const valores = {};
+  for(const k of KEYS) if(qtd[k]) valores[k] = somas[k] / qtd[k];
+  return {valores: meses ? valores : null, meses, qtd};
+}
 
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function seedDemo(){
@@ -267,6 +293,7 @@ async function login(user,pass){ state.user = await Parse.User.logIn(user,pass);
 async function logout(){ await Parse.User.logOut(); state.user=null; state.analistas=TEAM.map(([nome,nivel])=>({id:slug(nome),nome,nivel})); state.dados={}; setConn('Faça login para ver e lançar os dados','warn'); afterAuth(); }
 
 async function salvarLote(periodo, linhas){   // linhas: [{aid, valores:{flr:..}}]
+  if (periodo.endsWith('-ANO')) throw new Error('O acumulado anual é automático: lance apenas os meses.');
   if (DEMO){ for(const l of linhas){ const d=(state.dados[l.aid]=state.dados[l.aid]||{}); d[periodo]={...l.valores}; } render(); return linhas.length; }
   const objs=[];
   for (const l of linhas){
@@ -318,10 +345,15 @@ function renderTime(){
   const root=$('#tab-time'); root.replaceChildren();
   const niveis=[...new Set(state.analistas.map(a=>a.nivel).filter(Boolean))].sort();
   root.append(h('div',{class:'bar'},
-    select('f-per','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.periodo,v=>{ui.periodo=v;render();}),
+    select('f-per','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.periodo,v=>{ui.periodo=v;ui.ano=Number(v.slice(0,4));render();}),
     select('f-niv','Nível',[{v:'',t:'Todos'},...niveis.map(n=>({v:n,t:n}))],ui.nivel,v=>{ui.nivel=v;render();})));
+  const anual = ui.periodo.endsWith('-ANO');
   const rows = state.analistas.filter(a=>!ui.nivel||a.nivel===ui.nivel).map(a=>{
-    const r=(state.dados[a.id]||{})[ui.periodo]; const c=calcIES(r,state.cfg,a.nivel); return {a,r,ap:aplicaveis(a.nivel,state.cfg),...c};
+    const dadosAnalista = state.dados[a.id] || {};
+    const agregado = anual ? consolidarAno(dadosAnalista, ui.periodo.slice(0,4)) : null;
+    const r = anual ? agregado.valores : dadosAnalista[ui.periodo];
+    const c=calcIES(r,state.cfg,a.nivel);
+    return {a,r,meses: agregado ? agregado.meses : 0,ap:aplicaveis(a.nivel,state.cfg),...c};
   });
   const com = rows.filter(x=>x.ies!==null).sort((x,y)=>y.ies-x.ies);
   const media = com.length? com.reduce((s,x)=>s+x.ies,0)/com.length : null;
@@ -333,15 +365,18 @@ function renderTime(){
     card('Maior IES', com.length?fmt(com[0].ies,1):'—', com.length?com[0].a.nome:''),
     card('Menor IES', com.length?fmt(com[com.length-1].ies,1):'—', com.length?com[com.length-1].a.nome:''),
     card('Analistas sem dados', String(rows.length-com.length), `de ${rows.length} no filtro`)));
+  if(anual) root.append(h('div',{class:'note',style:'margin-bottom:16px'},
+    'Acumulado automático: média de cada indicador nos meses com lançamento deste ano, seguida do cálculo do IES. Meses sem dados não entram na média; os meses têm peso igual.'));
   if(!rows.length){ root.append(h('div',{class:'box empty'}, state.user?'Nenhum analista cadastrado. Use a aba "Lançar dados" para cadastrar a equipe.':'Faça login para ver os dados.')); return; }
   root.append(h('div',{class:'box'},h('h2',{},'IES por analista'),h('div',{class:'canvas'},h('canvas',{id:'ch-time'}))));
   root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES médio do time — ${ui.ano}`),h('div',{class:'canvas',style:'height:260px'},h('canvas',{id:'ch-evo'}))));
-  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Analista'),h('th',{},'Nível'),h('th',{},'IES'),...KEYS.map(k=>h('th',{},LABEL[k])),h('th',{},'Ind. preench.'))),
+  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Analista'),h('th',{},'Nível'),h('th',{},'IES'),...KEYS.map(k=>h('th',{},LABEL[k])),h('th',{},'Ind. preench.'),...(anual?[h('th',{},'Meses lançados')]:[]))),
     h('tbody',{},[...com,...rows.filter(x=>x.ies===null)].map(x=>h('tr',{},
       h('td',{},x.a.nome),h('td',{},x.a.nivel||'—'),
       h('td',{class:'ies '+iesClass(x.ies)},fmt(x.ies,1)),
       ...KEYS.map(k=>h('td',{class:metaClass(k,x.r&&x.r[k]),title:tip(k,x.r&&x.r[k])},fmt(x.r&&x.r[k],1))),
-      h('td',{},x.n?`${x.n}/${x.de}${x.n<x.de?' (parcial)':''}`:'—')))));
+      h('td',{},x.n?`${x.n}/${x.de}${x.n<x.de?' (parcial)':''}`:'—'),
+      ...(anual?[h('td',{},x.meses?`${x.meses}/12`:'—')]:[])))));
   root.append(h('div',{class:'box'},h('h2',{},'Detalhamento'),h('div',{class:'tw'},t),
     h('div',{class:'note'},`IES: verde = ≥ ${state.cfg.metaIES} (meta); vermelho = abaixo. Indicadores (benchmark do Detalhamento): verde = Excelente ou Alta performance; amarelo = Saudável; vermelho = abaixo do saudável. IES com menos de 6 indicadores é parcial (marcado como parcial) e não é comparável.`)));
   const evo = Array.from({length:12},(_,i)=>{ const p=`${ui.ano}-${String(i+1).padStart(2,'0')}`;
@@ -364,21 +399,23 @@ function renderAnalista(){
     select('a-sel','Analista',state.analistas.map(x=>({v:x.id,t:`${x.nome} (${x.nivel||'—'})`})),ui.analista,v=>{ui.analista=v;render();}),
     select('a-ano','Ano',[OPTIONS.anoAtual,OPTIONS.anoAtual-1].map(y=>({v:String(y),t:String(y)})),String(ui.ano),v=>{ui.ano=+v;render();})));
   const ms = Array.from({length:12},(_,i)=>`${ui.ano}-${String(i+1).padStart(2,'0')}`);
-  const ap_ = aplicaveis(a.nivel,state.cfg), soma_ = ap_.reduce((t,k)=>t+state.cfg.pesos[k],0);
+  const ap_ = aplicaveis(a.nivel,state.cfg);
   const serie = ms.map(p=>calcIES(d[p],state.cfg,a.nivel).ies);
-  const acum = calcIES(d[`${ui.ano}-ANO`],state.cfg,a.nivel);
+  const anual = consolidarAno(d, ui.ano);
+  const acum = calcIES(anual.valores,state.cfg,a.nivel);
   const vals = serie.filter(v=>v!==null);
   root.append(h('div',{class:'cards'},
-    card(`IES acumulado ${ui.ano}`, fmt(acum.ies,1), acum.n?`${acum.n}/${acum.de} indicadores · meta ${state.cfg.metaIES}`:'não lançado'),
+    card(`IES acumulado ${ui.ano}`, fmt(acum.ies,1), acum.n?`${anual.meses} mês(es) · ${acum.n}/${acum.de} indicadores · meta ${state.cfg.metaIES}`:'sem dados no ano'),
     card('Melhor mês', vals.length?fmt(Math.max(...vals),1):'—', vals.length?MESES[serie.indexOf(Math.max(...vals))]:''),
     card('Pior mês', vals.length?fmt(Math.min(...vals),1):'—', vals.length?MESES[serie.indexOf(Math.min(...vals))]:''),
     card('Meses com dados', String(vals.length), 'de 12')));
   root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES — ${a.nome}`),h('div',{class:'canvas'},h('canvas',{id:'ch-an'}))));
   const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Benchmark'),h('th',{},'Peso'),...MESES.map(m=>h('th',{},m)),h('th',{},'Ano'))),
     h('tbody',{},KEYS.map(k=>h('tr',{},h('td',{},FULL[k]+(ap_.includes(k)?'':' (opcional neste nível)')),h('td',{style:'text-align:left;white-space:normal;font-size:12px;color:var(--muted);min-width:210px'},state.cfg.bench[k].texto),h('td',{},Math.round(state.cfg.pesos[k]*100)+'%'),
-      ...[...ms,`${ui.ano}-ANO`].map(p=>{const v=d[p]&&d[p][k]; return h('td',{class:metaClass(k,v),title:tip(k,v)},fmt(v,1));}))),
+      ...ms.map(p=>{const v=d[p]&&d[p][k]; return h('td',{class:metaClass(k,v),title:tip(k,v)},fmt(v,1));}),
+      h('td',{class:metaClass(k,anual.valores&&anual.valores[k]),title:tip(k,anual.valores&&anual.valores[k])},fmt(anual.valores&&anual.valores[k],1)))),
       h('tr',{},h('td',{class:'ies'},'IES'),h('td',{}),h('td',{}),...serie.map(v=>h('td',{class:'ies '+iesClass(v)},fmt(v,1))),h('td',{class:'ies '+iesClass(acum.ies)},fmt(acum.ies,1)))));
-  root.append(h('div',{class:'box'},h('h2',{},'Indicadores mês a mês'),h('div',{class:'tw'},t),h('div',{class:'note'},'Cores pelo benchmark do Detalhamento: verde = Excelente ou Alta performance; amarelo = Saudável; vermelho = abaixo do saudável. IES: meta ≥ '+state.cfg.metaIES+'.')));
+  root.append(h('div',{class:'box'},h('h2',{},'Indicadores mês a mês'),h('div',{class:'tw'},t),h('div',{class:'note'},'Cores pelo benchmark do Detalhamento: verde = Excelente ou Alta performance; amarelo = Saudável; vermelho = abaixo do saudável. IES: meta ≥ '+state.cfg.metaIES+'. O campo Ano é calculado automaticamente, pela média dos meses lançados em cada indicador.')));
   chart('ch-an',{type:'line',data:{labels:MESES,datasets:[{label:'IES',data:serie.map(v=>v===null?null:+v.toFixed(2)),borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},{label:'Meta IES',data:MESES.map(()=>state.cfg.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
     options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
 }
@@ -388,11 +425,12 @@ function renderLancar(){
   if(!state.user){ root.append(h('div',{class:'box empty'},'Faça login para lançar dados.')); return; }
   if(!state.analistas.length || (!DEMO && !Object.keys(state.anaObjs).length)){
     root.append(h('div',{class:'box'},h('h2',{},'Nenhum analista cadastrado no Back4App'),
-      h('p',{},'Cadastre a equipe UNLT (17 pessoas) com um clique. Depois é só lançar os indicadores de cada mês.'),
+      h('p',{},`Cadastre a equipe UNLT (${TEAM.length} pessoas) com um clique. Depois é só lançar os indicadores de cada mês.`),
       h('button',{class:'btn',onclick:async e=>{e.target.disabled=true;try{await cadastrarEquipe();}catch(err){root.append(h('div',{class:'msg bad'},'Erro: '+(err.message||err)));}}},'Cadastrar equipe UNLT')));
     return;
   }
-  if(!ui.lPeriodo) ui.lPeriodo=periodos[1].id;
+  const periodosLancamento = periodos.filter(p=>!p.id.endsWith('-ANO'));
+  if(!ui.lPeriodo || ui.lPeriodo.endsWith('-ANO')) ui.lPeriodo=periodosLancamento[0].id;
   const inputs={};   // aid -> {k: input}
   const orig=(aid)=> (state.dados[aid]||{})[ui.lPeriodo]||{};
   const marcar=(aid,tr)=>{ const mudou=KEYS.some(k=>{ const v=inputs[aid][k].value.trim()===''?undefined:Number(inputs[aid][k].value.replace(',','.')); return v!==orig(aid)[k]; }); tr.classList.toggle('chg',mudou); };
@@ -415,8 +453,8 @@ function renderLancar(){
     msg.replaceChildren(h('div',{class:'msg '+(sem.length?'bad':'ok')},`${ok} linha(s) aplicada(s) — confira e clique em Salvar.`+(sem.length?` Não reconhecidos: ${sem.join(', ')}`:'')));
   };
   root.append(h('div',{class:'box'},h('h2',{},'Lançamento em lote'),
-    h('div',{class:'bar'},select('l-pe','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.lPeriodo,v=>{ui.lPeriodo=v;render();})),
-    h('div',{class:'note',style:'margin:0 0 8px'},'Percentuais sem o símbolo % (ex.: 91,7) e TME em dias (ex.: 10,2). Célula vazia = indicador não lançado. Linhas alteradas ficam destacadas.'),
+    h('div',{class:'bar'},select('l-pe','Período',periodosLancamento.map(p=>({v:p.id,t:p.label})),ui.lPeriodo,v=>{ui.lPeriodo=v;render();})),
+    h('div',{class:'note',style:'margin:0 0 8px'},'Lance apenas os meses: o acumulado anual é calculado automaticamente. Percentuais sem % (ex.: 91,7) e TME em dias (ex.: 10,2). Célula vazia = indicador não lançado. Linhas alteradas ficam destacadas.'),
     h('div',{class:'tw'},h('table',{class:'lote'},h('thead',{},h('tr',{},h('th',{},'Analista'),...KEYS.map(k=>h('th',{},LABEL[k])))),tbody)),
     msg,
     h('div',{style:'margin-top:10px;display:flex;gap:8px'},h('button',{class:'btn',onclick:async e=>{
@@ -440,6 +478,7 @@ function renderRegras(){
   root.append(h('div',{class:'box'},h('h2',{},'Como o IES é calculado'),
     h('p',{},`IES = soma das notas (0–100) de cada indicador × o peso. Mesmas regras do modelo em Excel. Meta: IES ≥ ${c.metaIES}.`),
     h('p',{},'Indicadores esperados por nível: N1 e N1/N2 Peticiona, os 6; N2, sem FLR e sem TME; N3, sem FLR. Os que não são esperados no nível são opcionais: se ficarem em branco, ficam de fora e os pesos dos demais são redistribuídos na mesma proporção (o IES continua de 0 a 100); se forem preenchidos, entram no cálculo. Tech Leads não entram no IES.'),
+    h('p',{},'Acumulado anual: para cada indicador, calculamos a média aritmética dos meses que possuem valores lançados (incluindo zero, quando lançado). Meses vazios são ignorados e todos os meses lançados têm o mesmo peso. Aplicamos então a fórmula do IES sobre esses indicadores médios. O ano não precisa — nem pode — ser lançado separadamente. Para uma média anual ponderada pelo volume de tickets/respostas, seriam necessários esses volumes por mês.'),
     h('div',{class:'tw'},h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Peso'),h('th',{},'Benchmark'),h('th',{},'Nota'))),
       h('tbody',{},[
         ['flr','Percentual direto: nota = valor.'],['csat','Percentual direto: nota = valor.'],
