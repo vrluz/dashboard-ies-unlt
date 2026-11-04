@@ -132,7 +132,7 @@ textarea{width:100%;min-height:90px;font:12px/1.4 var(--font-mono);padding:10px;
    ===================================================================== */
 const B4A = {
   appId: "Y3S01W2GCPjZS8T07MLS1T9lZpadDj0hprfhZpke",
-  jsKey: "r0im48dona8wQMzS52URyl4MVIrmQtg8Fctl8jOJ",
+  jsKey: "HbVyxxzPUfJ6wjMf5Vi1NKkHeB3Ky2wOF4bnQGOc",
   serverURL: "https://parseapi.back4app.com"
 };
 const OPTIONS = { anoAtual: 2026 };
@@ -144,6 +144,21 @@ const OPTIONS = { anoAtual: 2026 };
 const KEYS = ['flr','csat','reab','tme','sla','back'];
 const LABEL = {flr:'FLR (%)',csat:'CSAT (%)',reab:'Reabertos (%)',tme:'TME P85 (dias)',sla:'SLA Solução (%)',back:'SLA Backlog (%)'};
 const FULL = {flr:'FLR - First Level Resolution (%)',csat:'CSAT - Customer Satisfaction Score (%)',reab:'Tickets reabertos (%)',tme:'TME - Tempo de Resolução - P85 (dias)',sla:'% SLA de Solução (%)',back:'SLA de Solução por Backlog (%)'};
+// Campos de contagem extraídos do mesmo Painel de Suporte do Projuris.
+// 'back' = % SLA de solução por backlog (existente); 'backlogTickets' = quantidade no backlog (novo).
+const EXTRA_KEYS = ['ticketsFechados','backlogTickets'];
+const ALL_KEYS = [...KEYS,...EXTRA_KEYS];
+LABEL.ticketsFechados = 'Tickets Fechados';
+LABEL.backlogTickets = 'Backlog de Tickets';
+FULL.ticketsFechados = 'Tickets Fechados (quantidade)';
+FULL.backlogTickets = 'Backlog de Tickets (quantidade)';
+const N2_KEYS = ['ticketsFechados','csat','reab','backlogTickets'];
+const N2_CTX = ['sla','back','tme']; // oficiais, apenas contexto, sem nota individual
+const N2_ENTRY = [...N2_KEYS,...N2_CTX];
+const isN2 = nivel => nivel === 'N2'; // 'N1/N2 Peticiona' não muda automaticamente
+const camposLancamento = nivel => isN2(nivel) ? N2_ENTRY : KEYS;
+const temNumero = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
+const fmtCampo = (k,v) => fmt(v,EXTRA_KEYS.includes(k)?0:1);
 const HIGHER = {flr:true,csat:true,reab:false,tme:false,sla:true,back:true};
 const DEFAULT_CFG = {
   pesos:{flr:.20,csat:.20,reab:.15,tme:.15,sla:.20,back:.10},
@@ -183,6 +198,8 @@ function incluidos(row, cfg, nivel){   // os do nível + os opcionais que foram 
   return KEYS.filter(k=>ap.includes(k) || (row && row[k]!==undefined && row[k]!==null && row[k]!=='' && !isNaN(row[k])));
 }
 function calcIES(row, cfg, nivel){
+  // Não calcular IES N2: o painel oficial não define meta/peso para volume de tickets.
+  if (isN2(nivel)) return {ies:null,n:0,de:0};
   const ks=incluidos(row,cfg,nivel), soma=ks.reduce((t,k)=>t+cfg.pesos[k],0);
   let n=0,s=0;
   for (const k of ks){ const nt=nota(k,row&&row[k],cfg); if(nt!==null){n++; s+=nt*cfg.pesos[k]/soma;} }
@@ -193,7 +210,7 @@ function calcIES(row, cfg, nivel){
 /* =====================================================================
    3) CAMADA DE DADOS (Back4App / Parse)
       Classe Analista: nome, nivel, slug, ativo
-      Classe Medicao : analistaId (slug), periodo (ex.: "2026-07"), flr, csat, reab, tme, sla, back
+      Classe Medicao : analistaId (slug), periodo (ex.: "2026-07"), flr, csat, reab, tme, sla, back, ticketsFechados, backlogTickets
       O acumulado do ano é calculado a partir dos meses; não é gravado no Back4App.
    ===================================================================== */
 const TEAM = [
@@ -215,29 +232,30 @@ const DEMO = new URLSearchParams(location.search).has('demo');
 const CONFIGURED = !!B4A.appId && !B4A.appId.startsWith('COLE') && !!B4A.jsKey && !B4A.jsKey.startsWith('COLE');
 const state = {cfg:DEFAULT_CFG, analistas:[], dados:{}, objs:{}, anaObjs:{}, user:null};
 
-// Consolida os 12 meses de um ano, usando apenas valores realmente lançados.
-// Cada mês tem o mesmo peso dentro de cada indicador; zeros lançados são válidos.
-// Não usa registros antigos "YYYY-ANO", pois o anual é calculado, não lançado.
+// Consolidado anual calculado apenas no navegador a partir dos meses.
+// Contagem de tickets fechados = SOMA mensal; backlog = ÚLTIMO valor mensal lançado.
+// Indicadores de % e P85 = média aritmética mensal, não agregação ponderada oficial.
 function consolidarAno(dadosAnalista, ano){
-  const somas = {}, qtd = {};
-  let meses = 0;
+  const somas={}, qtd={}; let meses=0, backlogUltimo;
   for(let m=1; m<=12; m++){
-    const periodo = `${ano}-${String(m).padStart(2,'0')}`;
-    const linha = dadosAnalista[periodo];
+    const linha = dadosAnalista[`${ano}-${String(m).padStart(2,'0')}`];
     if(!linha) continue;
-    let temValor = false;
-    for(const k of KEYS){
-      const v = linha[k];
-      if(v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) continue;
-      somas[k] = (somas[k] || 0) + Number(v);
-      qtd[k] = (qtd[k] || 0) + 1;
-      temValor = true;
+    let temValor=false;
+    for(const k of ALL_KEYS){
+      const v=linha[k]; if(!temNumero(v)) continue;
+      temValor=true;
+      if(k==='backlogTickets'){ backlogUltimo=Number(v); continue; }
+      somas[k]=(somas[k]||0)+Number(v);
+      qtd[k]=(qtd[k]||0)+1;
     }
     if(temValor) meses++;
   }
-  const valores = {};
-  for(const k of KEYS) if(qtd[k]) valores[k] = somas[k] / qtd[k];
-  return {valores: meses ? valores : null, meses, qtd};
+  const valores={};
+  for(const k of ALL_KEYS){
+    if(k==='backlogTickets') { if(backlogUltimo!==undefined) valores[k]=backlogUltimo; }
+    else if(qtd[k]) valores[k]=k==='ticketsFechados' ? somas[k] : somas[k]/qtd[k];
+  }
+  return {valores:meses?valores:null,meses,qtd};
 }
 
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -249,6 +267,10 @@ function seedDemo(){
     state.dados[a.id] = {};
     for (const p of ['2026-07','2026-08','2026-09','2026-10']){
       const r = {}; for (const k of aplicaveis(a.nivel,DEFAULT_CFG)){ const j=(rnd()-.5)*(k==='tme'?3:k==='reab'?1.2:8); r[k]=Math.max(0,+(base[k]+j).toFixed(1)); if(k!=='tme'&&k!=='reab') r[k]=Math.min(100,r[k]); }
+      if(isN2(a.nivel)){
+        r.ticketsFechados=Math.round(12+rnd()*25);
+        r.backlogTickets=Math.round(4+rnd()*18);
+      }
       state.dados[a.id][p]=r;
     }
   }
@@ -267,7 +289,7 @@ async function carregar(){
   state.dados = {}; state.objs = {};
   for (const o of me){
     const aid=o.get('analistaId'), p=o.get('periodo'); if(!aid||!p) continue;
-    const r={}; for(const k of KEYS){ const v=o.get(k); if(v!==undefined&&v!==null) r[k]=v; }
+    const r={}; for(const k of ALL_KEYS){ const v=o.get(k); if(v!==undefined&&v!==null) r[k]=v; }
     (state.dados[aid]=state.dados[aid]||{})[p]=r; state.objs[aid+'|'+p]=o;
   }
 }
@@ -292,15 +314,26 @@ async function recarregar(){
 async function login(user,pass){ state.user = await Parse.User.logIn(user,pass); await recarregar(); afterAuth(); }
 async function logout(){ await Parse.User.logOut(); state.user=null; state.analistas=TEAM.map(([nome,nivel])=>({id:slug(nome),nome,nivel})); state.dados={}; setConn('Faça login para ver e lançar os dados','warn'); afterAuth(); }
 
-async function salvarLote(periodo, linhas){   // linhas: [{aid, valores:{flr:..}}]
+async function salvarLote(periodo, linhas){
   if (periodo.endsWith('-ANO')) throw new Error('O acumulado anual é automático: lance apenas os meses.');
-  if (DEMO){ for(const l of linhas){ const d=(state.dados[l.aid]=state.dados[l.aid]||{}); d[periodo]={...l.valores}; } render(); return linhas.length; }
+  if(DEMO){
+    for(const l of linhas){
+      const d=(state.dados[l.aid]=state.dados[l.aid]||{});
+      const r=d[periodo]||{};
+      for(const [k,v] of Object.entries(l.alterados)) if(v===undefined) delete r[k]; else r[k]=v;
+      d[periodo]=r;
+    }
+    render(); return linhas.length;
+  }
   const objs=[];
-  for (const l of linhas){
+  for(const l of linhas){
     const key=l.aid+'|'+periodo; let o=state.objs[key];
-    if (!o){ o=new Parse.Object('Medicao'); o.set('analistaId',l.aid); o.set('periodo',periodo); }
-    for (const k of KEYS){ if (l.valores[k]===undefined) o.unset(k); else o.set(k,l.valores[k]); }
-    o.set('atualizadoPor', state.user.get('username'));
+    if(!o){o=new Parse.Object('Medicao'); o.set('analistaId',l.aid); o.set('periodo',periodo);}
+    // Só altera os campos editados. Preserva valores antigos de outras métricas.
+    for(const [k,v] of Object.entries(l.alterados)) {
+      if(v===undefined) o.unset(k); else o.set(k,v);
+    }
+    o.set('atualizadoPor',state.user.get('username'));
     objs.push(o);
   }
   await Parse.Object.saveAll(objs);
@@ -347,46 +380,75 @@ function renderTime(){
   root.append(h('div',{class:'bar'},
     select('f-per','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.periodo,v=>{ui.periodo=v;ui.ano=Number(v.slice(0,4));render();}),
     select('f-niv','Nível',[{v:'',t:'Todos'},...niveis.map(n=>({v:n,t:n}))],ui.nivel,v=>{ui.nivel=v;render();})));
-  const anual = ui.periodo.endsWith('-ANO');
-  const rows = state.analistas.filter(a=>!ui.nivel||a.nivel===ui.nivel).map(a=>{
-    const dadosAnalista = state.dados[a.id] || {};
-    const agregado = anual ? consolidarAno(dadosAnalista, ui.periodo.slice(0,4)) : null;
-    const r = anual ? agregado.valores : dadosAnalista[ui.periodo];
-    const c=calcIES(r,state.cfg,a.nivel);
-    return {a,r,meses: agregado ? agregado.meses : 0,ap:aplicaveis(a.nivel,state.cfg),...c};
+  const anual=ui.periodo.endsWith('-ANO');
+  const rows=state.analistas.filter(a=>!ui.nivel||a.nivel===ui.nivel).map(a=>{
+    const dadosAnalista=state.dados[a.id]||{};
+    const agregado=anual?consolidarAno(dadosAnalista,ui.periodo.slice(0,4)):null;
+    const r=anual?agregado.valores:dadosAnalista[ui.periodo];
+    return {a,r,meses:agregado?agregado.meses:0,...calcIES(r,state.cfg,a.nivel)};
   });
-  const com = rows.filter(x=>x.ies!==null).sort((x,y)=>y.ies-x.ies);
-  const media = com.length? com.reduce((s,x)=>s+x.ies,0)/com.length : null;
-  if (DEMO) root.append(h('div',{class:'msg bad'},'DADOS FICTÍCIOS (modo demonstração) — gerados aleatoriamente, não representam nenhum analista real. Configure o Back4App para ver dados reais.'));
-  const acima = com.filter(x=>x.ies>=state.cfg.metaIES).length;
-  root.append(h('div',{class:'cards'},
-    card('IES médio do time', fmt(media,1), media===null?'sem dados no período':(media>=state.cfg.metaIES?'dentro da meta':'abaixo da meta')+` de ${state.cfg.metaIES}`),
-    card(`Na meta de IES (≥ ${state.cfg.metaIES})`, com.length?`${acima}/${com.length}`:'—', 'analistas com dados'),
-    card('Maior IES', com.length?fmt(com[0].ies,1):'—', com.length?com[0].a.nome:''),
-    card('Menor IES', com.length?fmt(com[com.length-1].ies,1):'—', com.length?com[com.length-1].a.nome:''),
-    card('Analistas sem dados', String(rows.length-com.length), `de ${rows.length} no filtro`)));
+  const n2rows=rows.filter(x=>isN2(x.a.nivel));
+  const outras=rows.filter(x=>!isN2(x.a.nivel));
+  const com=outras.filter(x=>x.ies!==null).sort((x,y)=>y.ies-x.ies);
+  const media=com.length?com.reduce((s,x)=>s+x.ies,0)/com.length:null;
+  if(DEMO) root.append(h('div',{class:'msg bad'},'DADOS FICTÍCIOS (modo demonstração) — não representam nenhum analista real.'));
   if(anual) root.append(h('div',{class:'note',style:'margin-bottom:16px'},
-    'Acumulado automático: média de cada indicador nos meses com lançamento deste ano, seguida do cálculo do IES. Meses sem dados não entram na média; os meses têm peso igual.'));
-  if(!rows.length){ root.append(h('div',{class:'box empty'}, state.user?'Nenhum analista cadastrado. Use a aba "Lançar dados" para cadastrar a equipe.':'Faça login para ver os dados.')); return; }
-  root.append(h('div',{class:'box'},h('h2',{},'IES por analista'),h('div',{class:'canvas'},h('canvas',{id:'ch-time'}))));
-  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES médio do time — ${ui.ano}`),h('div',{class:'canvas',style:'height:260px'},h('canvas',{id:'ch-evo'}))));
-  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Analista'),h('th',{},'Nível'),h('th',{},'IES'),...KEYS.map(k=>h('th',{},LABEL[k])),h('th',{},'Ind. preench.'),...(anual?[h('th',{},'Meses lançados')]:[]))),
-    h('tbody',{},[...com,...rows.filter(x=>x.ies===null)].map(x=>h('tr',{},
-      h('td',{},x.a.nome),h('td',{},x.a.nivel||'—'),
-      h('td',{class:'ies '+iesClass(x.ies)},fmt(x.ies,1)),
-      ...KEYS.map(k=>h('td',{class:metaClass(k,x.r&&x.r[k]),title:tip(k,x.r&&x.r[k])},fmt(x.r&&x.r[k],1))),
-      h('td',{},x.n?`${x.n}/${x.de}${x.n<x.de?' (parcial)':''}`:'—'),
-      ...(anual?[h('td',{},x.meses?`${x.meses}/12`:'—')]:[])))));
-  root.append(h('div',{class:'box'},h('h2',{},'Detalhamento'),h('div',{class:'tw'},t),
-    h('div',{class:'note'},`IES: verde = ≥ ${state.cfg.metaIES} (meta); vermelho = abaixo. Indicadores (benchmark do Detalhamento): verde = Excelente ou Alta performance; amarelo = Saudável; vermelho = abaixo do saudável. IES com menos de 6 indicadores é parcial (marcado como parcial) e não é comparável.`)));
-  const evo = Array.from({length:12},(_,i)=>{ const p=`${ui.ano}-${String(i+1).padStart(2,'0')}`;
-    const v=state.analistas.filter(a=>!ui.nivel||a.nivel===ui.nivel).map(a=>calcIES((state.dados[a.id]||{})[p],state.cfg,a.nivel).ies).filter(x=>x!==null);
-    return v.length? +(v.reduce((s,x)=>s+x,0)/v.length).toFixed(2) : null; });
-  chart('ch-evo',{type:'line',data:{labels:MESES,datasets:[{label:'IES médio',data:evo,borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},
-    {label:`Meta ${state.cfg.metaIES}`,data:MESES.map(()=>state.cfg.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
-    options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
-  chart('ch-time',{type:'bar',data:{labels:com.map(x=>x.a.nome),datasets:[{label:'IES',data:com.map(x=>+x.ies.toFixed(2)),backgroundColor:com.map(x=>bandColor(x.ies))}]},
-    options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{min:0,max:100}},plugins:{legend:{display:false}}}});
+    'Acumulado anual: tickets fechados = soma mensal; backlog = último valor lançado; percentuais e P85 = média simples dos meses lançados. Não equivale à taxa anual calculada sobre os tickets individuais.'));
+  if(!rows.length){root.append(h('div',{class:'box empty'},'Nenhum analista no filtro.'));return;}
+
+  if(outras.length){
+    const acima=com.filter(x=>x.ies>=state.cfg.metaIES).length;
+    root.append(h('div',{class:'cards'},
+      card('IES médio — níveis com cálculo',fmt(media,1),media===null?'sem dados no período':`Meta ${state.cfg.metaIES}`),
+      card(`Na meta de IES (≥ ${state.cfg.metaIES})`,com.length?`${acima}/${com.length}`:'—','analistas com nota'),
+      card('Maior IES',com.length?fmt(com[0].ies,1):'—',com.length?com[0].a.nome:''),
+      card('Menor IES',com.length?fmt(com[com.length-1].ies,1):'—',com.length?com[com.length-1].a.nome:''),
+      card('Analistas sem IES lançado',String(outras.length-com.length),`de ${outras.length} no filtro (N2 excluído)`)));
+    root.append(h('div',{class:'box'},h('h2',{},'IES por analista — N2 fora do ranking'),h('div',{class:'canvas'},h('canvas',{id:'ch-time'}))));
+    root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES médio — ${ui.ano} (sem N2)`),h('div',{class:'canvas',style:'height:260px'},h('canvas',{id:'ch-evo'}))));
+    const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Analista'),h('th',{},'Nível'),h('th',{},'IES'),...KEYS.map(k=>h('th',{},LABEL[k])),h('th',{},'Ind. preench.'),...(anual?[h('th',{},'Meses lançados')]:[]))),
+      h('tbody',{},[...com,...outras.filter(x=>x.ies===null)].map(x=>h('tr',{},
+        h('td',{},x.a.nome),h('td',{},x.a.nivel||'—'),
+        h('td',{class:'ies '+iesClass(x.ies)},fmt(x.ies,1)),
+        ...KEYS.map(k=>h('td',{class:metaClass(k,x.r&&x.r[k]),title:tip(k,x.r&&x.r[k])},fmt(x.r&&x.r[k],1))),
+        h('td',{},x.n?`${x.n}/${x.de}${x.n<x.de?' (parcial)':''}`:'—'),
+        ...(anual?[h('td',{},x.meses?`${x.meses}/12`:'—')]:[])))));
+    root.append(h('div',{class:'box'},h('h2',{},'Detalhamento — IES dos demais níveis'),h('div',{class:'tw'},t)));
+    const evo=Array.from({length:12},(_,i)=>{
+      const p=`${ui.ano}-${String(i+1).padStart(2,'0')}`;
+      const valores=outras.map(x=>calcIES((state.dados[x.a.id]||{})[p],state.cfg,x.a.nivel).ies).filter(v=>v!==null);
+      return valores.length?+(valores.reduce((s,v)=>s+v,0)/valores.length).toFixed(2):null;
+    });
+    chart('ch-evo',{type:'line',data:{labels:MESES,datasets:[
+      {label:'IES médio',data:evo,borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},
+      {label:`Meta ${state.cfg.metaIES}`,data:MESES.map(()=>state.cfg.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
+      options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
+    chart('ch-time',{type:'bar',data:{labels:com.map(x=>x.a.nome),datasets:[{label:'IES',data:com.map(x=>+x.ies.toFixed(2)),backgroundColor:com.map(x=>bandColor(x.ies))}]},
+      options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{min:0,max:100}},plugins:{legend:{display:false}}}});
+  }
+
+  if(n2rows.length){
+    const somaCampo=k=>{
+      const vals=n2rows.map(x=>x.r&&x.r[k]).filter(temNumero);
+      return vals.length?vals.reduce((s,v)=>s+Number(v),0):null;
+    };
+    root.append(h('div',{class:'msg ok'},'N2 — indicadores oficiais para acompanhamento; sem nota IES individual enquanto não houver metas e pesos validados para tickets fechados e backlog.'));
+    root.append(h('div',{class:'cards'},
+      card('Tickets fechados — N2',fmtCampo('ticketsFechados',somaCampo('ticketsFechados')),'soma dos analistas com lançamento'),
+      card('Backlog de tickets — N2',fmtCampo('backlogTickets',somaCampo('backlogTickets')),anual?'última posição informada de cada analista':'quantidade no período'),
+      card('Analistas N2',String(n2rows.length),'no filtro')));
+    const campos=[...N2_KEYS,...N2_CTX];
+    const tab=h('table',{},h('thead',{},h('tr',{},h('th',{},'Analista'),...campos.map(k=>h('th',{},LABEL[k])),...(anual?[h('th',{},'Meses lançados')]:[]))),
+      h('tbody',{},n2rows.map(x=>h('tr',{},h('td',{},x.a.nome),
+        ...campos.map(k=>h('td',{class:(k==='csat'||k==='reab')?metaClass(k,x.r&&x.r[k]):''},fmtCampo(k,x.r&&x.r[k]))),
+        ...(anual?[h('td',{},x.meses?`${x.meses}/12`:'—')]:[])))));
+    root.append(h('div',{class:'box'},h('h2',{},'Indicadores N2 — dados oficiais'),h('div',{class:'tw'},tab),
+      h('div',{class:'note'},'Primeiras quatro colunas: tickets fechados, CSAT, reaberturas e backlog de tickets. As três últimas (% SLA solução, % SLA backlog e P85) são somente contexto, não nota. Backlog de Tickets é QUANTIDADE; SLA Backlog é PERCENTUAL.')));
+    root.append(h('div',{class:'box'},h('h2',{},'Tickets fechados — N2'),h('div',{class:'canvas'},h('canvas',{id:'ch-n2-time'}))));
+    const validos=n2rows.filter(x=>temNumero(x.r&&x.r.ticketsFechados));
+    chart('ch-n2-time',{type:'bar',data:{labels:validos.map(x=>x.a.nome),datasets:[{label:'Tickets fechados',data:validos.map(x=>x.r.ticketsFechados),backgroundColor:css('--brand')}]},
+      options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{min:0,ticks:{precision:0}}},plugins:{legend:{display:false}}}});
+  }
 }
 function card(k,v,s){ return h('div',{class:'card'},h('div',{class:'k'},k),h('div',{class:'v'},v),h('div',{class:'s'},s||'')); }
 
@@ -398,6 +460,7 @@ function renderAnalista(){
   root.append(h('div',{class:'bar'},
     select('a-sel','Analista',state.analistas.map(x=>({v:x.id,t:`${x.nome} (${x.nivel||'—'})`})),ui.analista,v=>{ui.analista=v;render();}),
     select('a-ano','Ano',[OPTIONS.anoAtual,OPTIONS.anoAtual-1].map(y=>({v:String(y),t:String(y)})),String(ui.ano),v=>{ui.ano=+v;render();})));
+  if(isN2(a.nivel)){ renderAnalistaN2(root,a,d); return; }
   const ms = Array.from({length:12},(_,i)=>`${ui.ano}-${String(i+1).padStart(2,'0')}`);
   const ap_ = aplicaveis(a.nivel,state.cfg);
   const serie = ms.map(p=>calcIES(d[p],state.cfg,a.nivel).ies);
@@ -420,56 +483,114 @@ function renderAnalista(){
     options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
 }
 
+function renderAnalistaN2(root,a,d){
+  const ms=Array.from({length:12},(_,i)=>`${ui.ano}-${String(i+1).padStart(2,'0')}`);
+  const an=consolidarAno(d,ui.ano); const v=an.valores||{};
+  root.append(h('div',{class:'msg ok'},'N2: resultados oficiais sem IES numérico individual. SLA e P85 são apresentados apenas como contexto.'));
+  root.append(h('div',{class:'cards'},
+    card('Tickets Fechados — ano',fmtCampo('ticketsFechados',v.ticketsFechados),'soma dos meses lançados'),
+    card('Backlog de Tickets',fmtCampo('backlogTickets',v.backlogTickets),'último mês com valor informado'),
+    card('CSAT — média mensal',fmt(v.csat,1),an.meses?'sem ponderar pela quantidade de respostas':'sem dados'),
+    card('Reabertos — média mensal',fmt(v.reab,1),an.meses?'sem ponderar pelos tickets fechados':'sem dados'),
+    card('Meses com lançamento',String(an.meses),'no ano selecionado')));
+  const campos=[...N2_KEYS,...N2_CTX];
+  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Utilização'),...MESES.map(m=>h('th',{},m)),h('th',{},'Ano'))),
+    h('tbody',{},campos.map(k=>h('tr',{},
+      h('td',{},FULL[k]),
+      h('td',{},N2_KEYS.includes(k)?'Indicador N2':'Contexto'),
+      ...ms.map(p=>{const x=d[p]&&d[p][k];return h('td',{class:(k==='csat'||k==='reab')?metaClass(k,x):''},fmtCampo(k,x));}),
+      h('td',{class:(k==='csat'||k==='reab')?metaClass(k,v[k]):''},fmtCampo(k,v[k]))))));
+  root.append(h('div',{class:'box'},h('h2',{},`Indicadores oficiais — ${a.nome}`),h('div',{class:'tw'},t),
+    h('div',{class:'note'},'Ano: tickets fechados = soma; backlog = último mês informado; CSAT, reabertos, SLA e P85 = médias simples dos meses com dados. Taxas anuais oficiais exigiriam numeradores e denominadores mensais.')));
+  root.append(h('div',{class:'box'},h('h2',{},'Evolução de tickets fechados'),h('div',{class:'canvas'},h('canvas',{id:'ch-n2-fechados'}))));
+  root.append(h('div',{class:'box'},h('h2',{},'Evolução do backlog de tickets'),h('div',{class:'canvas'},h('canvas',{id:'ch-n2-backlog'}))));
+  for(const [campo,id,nome] of [['ticketsFechados','ch-n2-fechados','Tickets Fechados'],['backlogTickets','ch-n2-backlog','Backlog de Tickets']]){
+    chart(id,{type:'bar',data:{labels:MESES,datasets:[{label:nome,data:ms.map(p=>{const x=d[p]&&d[p][campo];return temNumero(x)?Number(x):null;}),backgroundColor:css('--brand')}]},
+      options:{maintainAspectRatio:false,scales:{y:{min:0,ticks:{precision:0}}},plugins:{legend:{display:false}}}});
+  }
+}
+
 function renderLancar(){
   const root=$('#tab-lancar'); root.replaceChildren();
-  if(!state.user){ root.append(h('div',{class:'box empty'},'Faça login para lançar dados.')); return; }
-  if(!state.analistas.length || (!DEMO && !Object.keys(state.anaObjs).length)){
+  if(!state.user){root.append(h('div',{class:'box empty'},'Faça login para lançar dados.'));return;}
+  if(!state.analistas.length||(!DEMO&&!Object.keys(state.anaObjs).length)){
     root.append(h('div',{class:'box'},h('h2',{},'Nenhum analista cadastrado no Back4App'),
-      h('p',{},`Cadastre a equipe UNLT (${TEAM.length} pessoas) com um clique. Depois é só lançar os indicadores de cada mês.`),
+      h('p',{},`Cadastre a equipe UNLT (${TEAM.length} pessoas) com um clique.`),
       h('button',{class:'btn',onclick:async e=>{e.target.disabled=true;try{await cadastrarEquipe();}catch(err){root.append(h('div',{class:'msg bad'},'Erro: '+(err.message||err)));}}},'Cadastrar equipe UNLT')));
     return;
   }
-  const periodosLancamento = periodos.filter(p=>!p.id.endsWith('-ANO'));
-  if(!ui.lPeriodo || ui.lPeriodo.endsWith('-ANO')) ui.lPeriodo=periodosLancamento[0].id;
-  const inputs={};   // aid -> {k: input}
-  const orig=(aid)=> (state.dados[aid]||{})[ui.lPeriodo]||{};
-  const marcar=(aid,tr)=>{ const mudou=KEYS.some(k=>{ const v=inputs[aid][k].value.trim()===''?undefined:Number(inputs[aid][k].value.replace(',','.')); return v!==orig(aid)[k]; }); tr.classList.toggle('chg',mudou); };
+  const periodosLancamento=periodos.filter(p=>!p.id.endsWith('-ANO'));
+  if(!ui.lPeriodo||ui.lPeriodo.endsWith('-ANO')) ui.lPeriodo=periodosLancamento[0].id;
+  const inputs={}, orig=aid=>(state.dados[aid]||{})[ui.lPeriodo]||{};
+  const analistaPorId=Object.fromEntries(state.analistas.map(a=>[a.id,a]));
+  const marcar=(aid,tr)=>{
+    const mudou=camposLancamento(analistaPorId[aid].nivel).some(k=>{
+      const t=inputs[aid][k].value.trim().replace(',','.');
+      const v=t===''?undefined:Number(t);
+      return v!==orig(aid)[k];
+    });
+    tr.classList.toggle('chg',mudou);
+  };
   const tbody=h('tbody',{},state.analistas.map(a=>{
-    inputs[a.id]={}; const tr=h('tr',{},h('td',{},`${a.nome} `,h('span',{class:'chip'},a.nivel||'—')),
-      ...KEYS.map(k=>{ const i=h('input',{type:'text',inputmode:'decimal',value:orig(a.id)[k]!==undefined?String(orig(a.id)[k]).replace('.',','):'',oninput:()=>marcar(a.id,tr)}); inputs[a.id][k]=i; return h('td',{},i); }));
-    return tr; }));
+    inputs[a.id]={}; const campos=camposLancamento(a.nivel);
+    const tr=h('tr',{},h('td',{},`${a.nome} `,h('span',{class:'chip'},a.nivel||'—')),
+      ...ALL_KEYS.map(k=>{
+        if(!campos.includes(k)) return h('td',{class:'na'},'—');
+        const i=h('input',{type:'text',inputmode:'decimal',value:orig(a.id)[k]!==undefined?String(orig(a.id)[k]).replace('.',','):'',oninput:()=>marcar(a.id,tr)});
+        inputs[a.id][k]=i;
+        return h('td',{},i);
+      }));
+    return tr;
+  }));
   const msg=h('div',{id:'l-msg'});
-  const ta=h('textarea',{placeholder:'Cole aqui do Excel: Analista, FLR, CSAT, Reabertos, TME, SLA, Backlog (uma linha por analista, colunas separadas por TAB ou ;)'});
+  const ta=h('textarea',{placeholder:'N1/N3: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog\nN2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets\nSepare por TAB ou ponto e vírgula.'});
   const aplicar=()=>{
-    const porNome={}; state.analistas.forEach(a=>porNome[norm(a.nome)]=a.id);
-    let ok=0, sem=[];
+    const porNome=Object.fromEntries(state.analistas.map(a=>[norm(a.nome),a]));
+    let ok=0; const sem=[];
     for(const linha of ta.value.split(/\r?\n/)){
       if(!linha.trim()) continue;
-      const c=linha.split(/\t|;/).map(x=>x.trim()); const aid=porNome[norm(c[0])];
-      if(!aid){ if(norm(c[0])!=='analista') sem.push(c[0]); continue; }
-      KEYS.forEach((k,i)=>{ const v=(c[i+1]||'').replace('%','').trim(); inputs[aid][k].value=v; });
-      inputs[aid][KEYS[0]].dispatchEvent(new Event('input')); ok++;
+      const c=linha.split(/\t|;/).map(x=>x.trim()); const a=porNome[norm(c[0])];
+      if(!a){if(norm(c[0])!=='analista')sem.push(c[0]);continue;}
+      const colunas=isN2(a.nivel)?N2_KEYS:KEYS;
+      colunas.forEach((k,i)=>{
+        const v=(c[i+1]||'').replace('%','').trim();
+        if(inputs[a.id][k]) inputs[a.id][k].value=v;
+      });
+      const k=colunas[0]; if(inputs[a.id][k]) inputs[a.id][k].dispatchEvent(new Event('input'));
+      ok++;
     }
-    msg.replaceChildren(h('div',{class:'msg '+(sem.length?'bad':'ok')},`${ok} linha(s) aplicada(s) — confira e clique em Salvar.`+(sem.length?` Não reconhecidos: ${sem.join(', ')}`:'')));
+    msg.replaceChildren(h('div',{class:'msg '+(sem.length?'bad':'ok')},`${ok} linha(s) aplicada(s); confira e clique em Salvar.`+(sem.length?` Não reconhecidos: ${sem.join(', ')}`:'')));
   };
-  root.append(h('div',{class:'box'},h('h2',{},'Lançamento em lote'),
+  root.append(h('div',{class:'box'},h('h2',{},'Lançamento mensal — N1/N3 e N2'),
     h('div',{class:'bar'},select('l-pe','Período',periodosLancamento.map(p=>({v:p.id,t:p.label})),ui.lPeriodo,v=>{ui.lPeriodo=v;render();})),
-    h('div',{class:'note',style:'margin:0 0 8px'},'Lance apenas os meses: o acumulado anual é calculado automaticamente. Percentuais sem % (ex.: 91,7) e TME em dias (ex.: 10,2). Célula vazia = indicador não lançado. Linhas alteradas ficam destacadas.'),
-    h('div',{class:'tw'},h('table',{class:'lote'},h('thead',{},h('tr',{},h('th',{},'Analista'),...KEYS.map(k=>h('th',{},LABEL[k])))),tbody)),
+    h('div',{class:'note',style:'margin:0 0 8px'},'N2: preencha Tickets Fechados (quantidade), CSAT (%), Reabertos (%) e Backlog de Tickets (quantidade). SLA Solução, SLA Backlog e TME P85 são opcionais e apenas contextuais para N2. Campos com — não se aplicam ao nível. Célula vazia = dado não lançado.'),
+    h('div',{class:'tw'},h('table',{class:'lote'},h('thead',{},h('tr',{},h('th',{},'Analista'),...ALL_KEYS.map(k=>h('th',{},LABEL[k])))),tbody)),
     msg,
     h('div',{style:'margin-top:10px;display:flex;gap:8px'},h('button',{class:'btn',onclick:async e=>{
       const linhas=[];
       for(const a of state.analistas){
-        const valores={}; let alguma=false, mudou=false;
-        for(const k of KEYS){ const t=inputs[a.id][k].value.trim().replace(',','.'); if(t!==''){ const n=Number(t); if(isNaN(n)){ msg.replaceChildren(h('div',{class:'msg bad'},`Valor inválido em ${a.nome} (${LABEL[k]}): "${t}"`)); return; } valores[k]=n; alguma=true; } if(valores[k]!==orig(a.id)[k]) mudou=true; }
-        if(mudou && (alguma || state.objs[a.id+'|'+ui.lPeriodo])) linhas.push({aid:a.id,valores});
+        const alterados={};
+        for(const k of camposLancamento(a.nivel)){
+          const t=inputs[a.id][k].value.trim().replace(',','.');
+          let v;
+          if(t!==''){
+            v=Number(t);
+            if(!Number.isFinite(v)||((k==='ticketsFechados'||k==='backlogTickets')&&(!Number.isInteger(v)||v<0))||(['flr','csat','reab','sla','back'].includes(k)&&(v<0||v>100))||(k==='tme'&&v<0)){
+              msg.replaceChildren(h('div',{class:'msg bad'},`Valor inválido em ${a.nome} (${LABEL[k]}): "${t}"`));return;
+            }
+          }
+          if(v!==orig(a.id)[k]) alterados[k]=v;
+        }
+        if(Object.keys(alterados).length) linhas.push({aid:a.id,alterados});
       }
-      if(!linhas.length){ msg.replaceChildren(h('div',{class:'msg ok'},'Nada alterado para salvar.')); return; }
+      if(!linhas.length){msg.replaceChildren(h('div',{class:'msg ok'},'Nada alterado para salvar.'));return;}
       e.target.disabled=true;
-      try{ const n=await salvarLote(ui.lPeriodo,linhas); const m2=$('#l-msg'); if(m2) m2.replaceChildren(h('div',{class:'msg ok'},`${n} analista(s) salvo(s).`)); }
-      catch(err){ msg.replaceChildren(h('div',{class:'msg bad'},'Não foi possível salvar: '+(err.message||err))); e.target.disabled=false; }
+      try{const n=await salvarLote(ui.lPeriodo,linhas); const m=$('#l-msg'); if(m)m.replaceChildren(h('div',{class:'msg ok'},`${n} analista(s) salvo(s).`));}
+      catch(err){msg.replaceChildren(h('div',{class:'msg bad'},'Não foi possível salvar: '+(err.message||err)));e.target.disabled=false;}
     }},'Salvar período'))),
-    h('div',{class:'box'},h('h2',{},'Colar do Excel'),ta,h('div',{style:'margin-top:8px'},h('button',{class:'btn ghost',onclick:aplicar},'Preencher a tabela com o que colei'))));
+    h('div',{class:'box'},h('h2',{},'Colar do Excel'),
+      h('div',{class:'note'},'Ordem N1/N3: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog. Ordem N2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets. Campos de contexto do N2 podem ser preenchidos na tabela acima.'),
+      ta,h('div',{style:'margin-top:8px'},h('button',{class:'btn ghost',onclick:aplicar},'Preencher a tabela com o que colei'))));
 }
 
 function renderRegras(){
@@ -477,8 +598,8 @@ function renderRegras(){
   const c=state.cfg;
   root.append(h('div',{class:'box'},h('h2',{},'Como o IES é calculado'),
     h('p',{},`IES = soma das notas (0–100) de cada indicador × o peso. Mesmas regras do modelo em Excel. Meta: IES ≥ ${c.metaIES}.`),
-    h('p',{},'Indicadores esperados por nível: N1 e N1/N2 Peticiona, os 6; N2, sem FLR e sem TME; N3, sem FLR. Os que não são esperados no nível são opcionais: se ficarem em branco, ficam de fora e os pesos dos demais são redistribuídos na mesma proporção (o IES continua de 0 a 100); se forem preenchidos, entram no cálculo. Tech Leads não entram no IES.'),
-    h('p',{},'Acumulado anual: para cada indicador, calculamos a média aritmética dos meses que possuem valores lançados (incluindo zero, quando lançado). Meses vazios são ignorados e todos os meses lançados têm o mesmo peso. Aplicamos então a fórmula do IES sobre esses indicadores médios. O ano não precisa — nem pode — ser lançado separadamente. Para uma média anual ponderada pelo volume de tickets/respostas, seriam necessários esses volumes por mês.'),
+    h('p',{},'IES numérico: permanece calculado com a regra anterior para N1, N1/N2 Peticiona e N3. O nível N2 puro não recebe IES numérico e não entra no ranking nem na média do time, pois o painel oficial não define metas ou pesos para converter Tickets Fechados e Backlog de Tickets em pontuação. Os indicadores oficiais do N2 são exibidos diretamente, sem inventar metas.'),
+    h('p',{},'Acumulado anual: Tickets Fechados = soma dos meses; Backlog de Tickets = última quantidade mensal registrada; demais indicadores (%) e P85 = média simples dos meses que têm valores. O acumulado das taxas é uma aproximação, não é uma taxa oficial calculada sobre os tickets/respostas do ano. Os meses sem dados são ignorados. O ano não precisa ser lançado separadamente.'),
     h('div',{class:'tw'},h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Peso'),h('th',{},'Benchmark'),h('th',{},'Nota'))),
       h('tbody',{},[
         ['flr','Percentual direto: nota = valor.'],['csat','Percentual direto: nota = valor.'],
@@ -487,7 +608,8 @@ function renderRegras(){
         ['sla','Percentual direto: nota = valor.'],
         ['back',`Linear: ≥ ${c.lim.back[0]*100}% = 100 pts; ≤ ${c.lim.back[1]*100}% = 0 pt.`]
       ].map(([k,t])=>h('tr',{},h('td',{},FULL[k]),h('td',{},Math.round(c.pesos[k]*100)+'%'),h('td',{style:'text-align:left;white-space:normal'},c.bench[k].texto),h('td',{style:'text-align:left;white-space:normal'},t)))))),
-    h('div',{class:'note'},'Pesos, limites, benchmarks e a lista de indicadores por nível ficam no bloco // <core> do index.html. Meta do IES total: ≥ '+c.metaIES+'.')));
+    h('div',{class:'note'},'No N2, Tickets Fechados, % CSAT, % Reabertos e Backlog de Tickets são os indicadores oficiais apresentados. % SLA Solução, % SLA Backlog e P85 são apenas contexto. Campos de contagem devem ser lançados como números inteiros, e não como percentuais.'),
+    h('div',{class:'note'},'As regras e metas anteriores do IES para os demais níveis continuam no bloco // <core> do index.html. Meta do IES: ≥ '+c.metaIES+'.')));
 }
 
 function render(){
