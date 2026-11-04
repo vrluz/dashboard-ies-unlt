@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard IES — UNLT</title>
+<style>
+/* Starian Design System — tokens (colors_and_type.css) */
+@font-face{font-family:"Aptos";src:local("Aptos"),url("fonts/Aptos.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Aptos";src:local("Aptos SemiBold"),url("fonts/Aptos-SemiBold.ttf") format("truetype");font-weight:600;font-display:swap}
+@font-face{font-family:"Aptos";src:local("Aptos Bold"),url("fonts/Aptos-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Aptos Display";src:local("Aptos Display"),url("fonts/Aptos-Display-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Aptos Mono";src:local("Aptos Mono"),url("fonts/Aptos-Mono.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Aptos Mono";src:local("Aptos Mono Bold"),url("fonts/Aptos-Mono-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+:root{
+  --font-sans:"Aptos",system-ui,"Segoe UI",sans-serif;--font-display:"Aptos Display","Aptos",system-ui,sans-serif;--font-mono:"Aptos Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --bg:#F4F5F6;--panel:#FFFFFF;--fg:#002232;--muted:#62696D;--line:rgba(0,34,50,.12);--chip:#E9ECEE;
+  --brand:#002232;--accent:#002232;--accent-fg:#FFFFFF;--accent-hover:#003A55;--link-hover:#2F80ED;
+  --ok:#27AE60;--warn:#F4B66B;--bad:#E63946;
+  --ok-t:#1B7F44;--warn-t:#8A5A00;--bad-t:#B3202D;
+  --okbg:#E6F4EC;--warnbg:#FDF3DF;--badbg:#FBE9EB;
+  --shadow-sm:0 2px 6px rgba(0,34,50,.08);--shadow-md:0 8px 20px rgba(0,34,50,.10);
+  --verticals:linear-gradient(90deg,#E63946 0%,#F2994A 18%,#F2C94C 35%,#27AE60 55%,#2D9CDB 72%,#2F80ED 88%,#9B51E0 100%);
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0E0E0E;--panel:#1A1F22;--fg:#FFFFFF;--muted:#B7BCBE;--line:rgba(255,255,255,.14);--chip:#2A3236;
+  --brand:#FFFFFF;--accent:#FFFFFF;--accent-fg:#002232;--accent-hover:#D7D7D7;
+  --ok-t:#5CD08A;--warn-t:#F4B66B;--bad-t:#F0707B;
+  --okbg:#12301F;--warnbg:#3A2E14;--badbg:#3B1A1D;--shadow-sm:none;--shadow-md:none}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--font-sans)}
+header{position:relative;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:18px 24px 20px;background:#002232;color:#fff}
+@media (prefers-color-scheme:dark){header{background:#0E0E0E;border-bottom:1px solid var(--line)}}
+header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--verticals)}
+.eyebrow{font:400 11px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;color:#B7BCBE;margin-bottom:6px}
+h1{font:700 22px/1.15 var(--font-display);letter-spacing:-.01em;margin:0;color:#fff}
+header .note{color:#B7BCBE;margin:4px 0 0}
+header .chip{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.22)}
+header .chip.ok{background:rgba(39,174,96,.22);color:#9FE5BC}header .chip.warn{background:rgba(244,182,107,.2);color:#F8D27A}header .chip.bad{background:rgba(230,57,70,.25);color:#FFB3B9}
+header .btn.ghost{color:#fff;border-color:rgba(255,255,255,.45);background:transparent}
+header .btn.ghost:hover{background:rgba(255,255,255,.12)}
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--chip);color:var(--muted);font-size:12px}
+.chip.ok{background:var(--okbg);color:var(--ok-t)}.chip.warn{background:var(--warnbg);color:var(--warn-t)}.chip.bad{background:var(--badbg);color:var(--bad-t)}
+nav{display:flex;gap:4px;padding:12px 24px 0;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--panel)}
+nav button{border:0;background:transparent;padding:10px 16px;color:var(--muted);font:600 14px var(--font-sans);cursor:pointer;border-bottom:2px solid transparent;transition:color 220ms var(--ease)}
+nav button:hover{color:var(--link-hover)}
+nav button.on{color:var(--fg);border-bottom-color:var(--fg)}
+main{padding:24px 24px 48px;max-width:1280px;margin:0 auto}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:16px}
+label{display:flex;flex-direction:column;gap:4px;font:400 11px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+select,input,button.btn{font:400 14px var(--font-sans);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)}
+select:focus,input:focus,textarea:focus{outline:2px solid #2F80ED;outline-offset:1px}
+button.btn{cursor:pointer;background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600;transition:background 220ms var(--ease),transform 100ms var(--ease)}
+button.btn:hover{background:var(--accent-hover)}button.btn:active{transform:scale(.95)}
+button.btn.ghost{background:transparent;color:var(--fg);border-color:var(--fg)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:28px 0 28px 0;padding:18px 20px;box-shadow:var(--shadow-sm);transition:transform 220ms var(--ease),box-shadow 220ms var(--ease)}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.card .k{font:400 11px var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.card .v{font:700 32px/1.1 var(--font-display);letter-spacing:-.02em;color:var(--fg);margin-top:6px}
+.card .s{font-size:12px;color:var(--muted);margin-top:2px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+.box h2{font:600 15px var(--font-sans);margin:0 0 12px;color:var(--fg)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:760px}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+th{font:400 11px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+td:first-child,th:first-child{text-align:left}
+td.mid{color:var(--warn-t);background:var(--warnbg)}td.na{color:var(--muted);font-style:italic}td.ok{color:var(--ok-t);background:var(--okbg)}td.bad{color:var(--bad-t);background:var(--badbg)}
+.ies{font-weight:700}
+.empty{color:var(--muted);padding:28px;text-align:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.canvas{position:relative;height:340px}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+.msg{padding:10px 14px;border-radius:12px;margin:8px 0;font-size:13px}
+.msg.ok{background:var(--okbg);color:var(--ok-t)}.msg.bad{background:var(--badbg);color:var(--bad-t)}
+dialog{border:1px solid var(--line);border-radius:20px;background:var(--panel);color:var(--fg);padding:22px;min-width:320px}
+dialog::backdrop{background:rgba(0,34,50,.55)}
+dialog form{display:flex;flex-direction:column;gap:12px}
+.lote input{width:78px;padding:6px;text-align:center}
+.lote td:first-child{min-width:190px}
+.lote tr.chg td{background:var(--warnbg)}
+textarea{width:100%;min-height:90px;font:12px/1.4 var(--font-mono);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="eyebrow">Starian · Suporte UNLT</div><h1>Índice de Eficiência do Suporte</h1><div class="note">IES por analista, mês a mês</div></div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span id="conn" class="chip">Conectando…</span>
+    <span id="who" class="chip" hidden></span>
+    <button id="loginBtn" class="btn ghost" hidden>Entrar</button>
+    <button id="logoutBtn" class="btn ghost" hidden>Sair</button>
+  </div>
+</header>
+<nav id="tabs">
+  <button data-tab="time" class="on">Visão do time</button>
+  <button data-tab="analista">Analista</button>
+  <button data-tab="lancar">Lançar dados</button>
+  <button data-tab="regras">Regras do IES</button>
+</nav>
+<main>
+  <section id="tab-time"></section>
+  <section id="tab-analista" hidden></section>
+  <section id="tab-lancar" hidden></section>
+  <section id="tab-regras" hidden></section>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" id="loginForm">
+    <strong>Entrar</strong>
+    <label>Usuário<input id="em" type="text" required autocomplete="username"></label>
+    <label>Senha<input id="pw" type="password" required autocomplete="current-password"></label>
+    <div id="loginErr" class="msg bad" hidden></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn ghost" id="cancelLogin">Cancelar</button>
+      <button type="submit" class="btn">Entrar</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/parse@4.3.1/dist/parse.min.js"></script>
+<script type="module">
+/* =====================================================================
+   1) CONFIGURAÇÃO — Back4App (Parse)
+      Back4App > seu app > App Settings > Security & Keys:
+      copie "Application ID" e "JavaScript Key" e cole abaixo.
+      Enquanto estiverem como "COLE_AQUI", o painel mostra a equipe sem números.
+      Para ver o layout com dados fictícios, abra o arquivo com  ?demo=1  no final do endereço.
+   ===================================================================== */
+const B4A = {
+  appId: "Y3S01W2GCPjZS8T07MLS1T9lZpadDj0hprfhZpke",
+  jsKey: "HbVyxxzPUfJ6wjMf5Vi1NKkHeB3Ky2wOF4bnQGOc",
+  serverURL: "https://parseapi.back4app.com"
+};
+const OPTIONS = { anoAtual: 2026 };
+
+/* =====================================================================
+   2) REGRAS DO IES (mesmas fórmulas do modelo em Excel)
+   ===================================================================== */
+// <core>
+const KEYS = ['flr','csat','reab','tme','sla','back'];
+const LABEL = {flr:'FLR (%)',csat:'CSAT (%)',reab:'Reabertos (%)',tme:'TME P85 (dias)',sla:'SLA Solução (%)',back:'SLA Backlog (%)'};
+const FULL = {flr:'FLR - First Level Resolution (%)',csat:'CSAT - Customer Satisfaction Score (%)',reab:'Tickets reabertos (%)',tme:'TME - Tempo de Resolução - P85 (dias)',sla:'% SLA de Solução (%)',back:'SLA de Solução por Backlog (%)'};
+const HIGHER = {flr:true,csat:true,reab:false,tme:false,sla:true,back:true};
+const DEFAULT_CFG = {
+  pesos:{flr:.20,csat:.20,reab:.15,tme:.15,sla:.20,back:.10},
+  lim:{reab:[.03,.12],tme:[8,18],back:[.9,.5]},      // [vale 100 pts, vale 0 pts]
+  // Benchmark da aba "Detalhamento" do modelo. dir 'up' = quanto maior melhor; 'down' = quanto menor melhor.
+  // top = a partir de quando é a faixa de cima; saud = limite da faixa "Saudável". Abaixo disso = abaixo do saudável.
+  bench:{
+    flr: {dir:'up',  saud:65, top:80, topNome:'Alta performance', texto:'Saudável 65–80% · Alta performance 80–90%'},
+    csat:{dir:'up',  saud:85, top:90, topNome:'Excelente',        texto:'Saudável 85–90% · Excelente 90–95%'},
+    reab:{dir:'down',saud:6,  top:4,  topNome:'Excelente',        texto:'Excelente 2–4% · Saudável 4–6%'},
+    tme: {dir:'down',saud:12, top:8,  topNome:'Excelente',        texto:'Excelente 5–8 dias · Saudável 8–12 dias'},
+    sla: {dir:'up',  saud:85, top:90, topNome:'Excelente',        texto:'Saudável 85–90% · Excelente 90–95%'},
+    back:{dir:'up',  saud:60, top:75, topNome:'Excelente',        texto:'Saudável 60–75% · Excelente 75–90%'}
+  },
+  metaIES:78,                                         // IES mínimo esperado (aba IES_Metas_Bônus, coluna UNLT)
+  naoSeAplica:{'N2':['flr','tme'],'N3':['flr']},      // indicadores opcionais no nível: só entram no IES se forem preenchidos (senão os pesos dos demais são redistribuídos)
+  niveisFora:['Tech Lead']                            // níveis que não entram no IES (não atendem a fila)
+};
+function faixa(k, v, cfg){   // 'topo' (Excelente / Alta performance) | 'saudavel' | 'abaixo' | null (sem dado)
+  if (v===null||v===undefined||v===''||isNaN(v)) return null;
+  v=+v; const b=cfg.bench[k], up=b.dir==='up';
+  if (up ? v>=b.top : v<=b.top) return 'topo';
+  return (up ? v>=b.saud : v<=b.saud) ? 'saudavel' : 'abaixo';
+}
+function faixaNome(k, v, cfg){ const f=faixa(k,v,cfg); return f===null?'':f==='topo'?cfg.bench[k].topNome:f==='saudavel'?'Saudável':'Abaixo do saudável'; }
+function aplicaveis(nivel, cfg){ const fora=(cfg.naoSeAplica&&cfg.naoSeAplica[nivel])||[]; return KEYS.filter(k=>!fora.includes(k)); }
+function nota(k, v, cfg){
+  if (v===null || v===undefined || v==='' || isNaN(v)) return null;
+  v = +v;
+  if (k==='flr'||k==='csat'||k==='sla') return v;
+  if (k==='reab'){ const d=v/100,[a,b]=cfg.lim.reab; return d<=a?100:d>=b?0:((b-d)/(b-a))*100; }
+  if (k==='tme'){ const [a,b]=cfg.lim.tme; return v<=a?100:v>=b?0:100-((v-a)/(b-a))*100; }
+  if (k==='back'){ const d=v/100,[a,b]=cfg.lim.back; return d>=a?100:d<=b?0:((d-b)/(a-b))*100; }
+}
+function incluidos(row, cfg, nivel){   // os do nível + os opcionais que foram preenchidos
+  const ap=aplicaveis(nivel,cfg);
+  return KEYS.filter(k=>ap.includes(k) || (row && row[k]!==undefined && row[k]!==null && row[k]!=='' && !isNaN(row[k])));
+}
+function calcIES(row, cfg, nivel){
+  const ks=incluidos(row,cfg,nivel), soma=ks.reduce((t,k)=>t+cfg.pesos[k],0);
+  let n=0,s=0;
+  for (const k of ks){ const nt=nota(k,row&&row[k],cfg); if(nt!==null){n++; s+=nt*cfg.pesos[k]/soma;} }
+  return n ? {ies:s,n,de:ks.length} : {ies:null,n:0,de:ks.length};
+}
+// </core>
+
+/* =====================================================================
+   3) CAMADA DE DADOS (Back4App / Parse)
+      Classe Analista: nome, nivel, slug, ativo
+      Classe Medicao : analistaId (slug), periodo ("2026-07" ou "2026-ANO"), flr, csat, reab, tme, sla, back
+   ===================================================================== */
+const TEAM = [
+ ["Gustavo Gaeta","N1"],["Humberto Ferro","N1"],["Lucas Rodrigues","N1"],["Maria Vitória Muniz","N1"],
+ ["Jordânia Vitória","N1"],["Leonardo de Souza Fernandes","N1"],["Felipe da Silva Luz","N1/N2 Peticiona"],
+ ["Max Filipe Macedo Braga","N1/N2 Peticiona"],["Julia Stein","N2"],["Jussara Wiemes","N2"],
+ ["Patrícia Ledoux","N2"],["Luiz Mário Fontes","N2"],["Cristian Andrade","N3"],["Cristian Dias","N3"],
+ ["Rafael de Sousa Tavares","N3"]
+];
+const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+const slug = s => norm(s).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const periodos = [];
+for (const y of [OPTIONS.anoAtual, OPTIONS.anoAtual-1]){
+  periodos.push({id:`${y}-ANO`,label:`${y} — acumulado do ano`});
+  for (let m=1;m<=12;m++) periodos.push({id:`${y}-${String(m).padStart(2,'0')}`,label:`${MESES[m-1]}/${y}`});
+}
+const DEMO = new URLSearchParams(location.search).has('demo');
+const CONFIGURED = !!B4A.appId && !B4A.appId.startsWith('COLE') && !!B4A.jsKey && !B4A.jsKey.startsWith('COLE');
+const state = {cfg:DEFAULT_CFG, analistas:[], dados:{}, objs:{}, anaObjs:{}, user:null};
+
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function seedDemo(){
+  const rnd = mulberry(42);
+  state.analistas = TEAM.map(([,nivel],i)=>({id:'demo-'+(i+1),nome:'Analista Demo '+String(i+1).padStart(2,'0'),nivel}));
+  for (const a of state.analistas){
+    const base = {flr:82+rnd()*14,csat:84+rnd()*11,reab:2.5+rnd()*3.5,tme:6+rnd()*8,sla:86+rnd()*10,back:45+rnd()*35};
+    state.dados[a.id] = {};
+    for (const p of ['2026-07','2026-08','2026-09','2026-10']){
+      const r = {}; for (const k of aplicaveis(a.nivel,DEFAULT_CFG)){ const j=(rnd()-.5)*(k==='tme'?3:k==='reab'?1.2:8); r[k]=Math.max(0,+(base[k]+j).toFixed(1)); if(k!=='tme'&&k!=='reab') r[k]=Math.min(100,r[k]); }
+      state.dados[a.id][p]=r;
+    }
+  }
+}
+
+async function fetchAll(cls){
+  const out=[]; let skip=0;
+  for(;;){ const q=new Parse.Query(cls); q.limit(1000); q.skip(skip); q.ascending('createdAt'); const r=await q.find(); out.push(...r); if(r.length<1000) break; skip+=1000; }
+  return out;
+}
+async function carregar(){
+  const [an, me] = await Promise.all([fetchAll('Analista'), fetchAll('Medicao')]);
+  state.anaObjs = {}; 
+  state.analistas = an.map(o=>{ const id=o.get('slug')||slug(o.get('nome')); state.anaObjs[id]=o; return {id,nome:o.get('nome'),nivel:o.get('nivel'),ativo:o.get('ativo')}; })
+    .filter(a=>a.ativo!==false && !DEFAULT_CFG.niveisFora.includes(a.nivel)).sort((a,b)=>a.nome.localeCompare(b.nome));
+  state.dados = {}; state.objs = {};
+  for (const o of me){
+    const aid=o.get('analistaId'), p=o.get('periodo'); if(!aid||!p) continue;
+    const r={}; for(const k of KEYS){ const v=o.get(k); if(v!==undefined&&v!==null) r[k]=v; }
+    (state.dados[aid]=state.dados[aid]||{})[p]=r; state.objs[aid+'|'+p]=o;
+  }
+}
+function escolherPeriodoPadrao(){
+  const ms = periodos.filter(p=>!p.id.endsWith('ANO')).map(p=>p.id).sort().reverse();
+  const achou = ms.find(p=>state.analistas.some(a=>state.dados[a.id]&&state.dados[a.id][p]));
+  if (achou){ ui.periodo=achou; ui.lPeriodo=achou; ui.ano=+achou.slice(0,4); }
+}
+async function connect(){
+  if (DEMO){ seedDemo(); setConn('MODO DEMONSTRAÇÃO — dados fictícios (?demo=1)','warn'); state.user={username:'demo'}; escolherPeriodoPadrao(); afterAuth(); return; }
+  state.analistas = TEAM.map(([nome,nivel])=>({id:slug(nome),nome,nivel}));
+  if (!CONFIGURED){ setConn('Back4App não configurado (cole o App ID e a JS Key no arquivo)','warn'); afterAuth(); return; }
+  Parse.initialize(B4A.appId, B4A.jsKey); Parse.serverURL = B4A.serverURL;
+  state.user = Parse.User.current();
+  if (state.user){ await recarregar(); } else setConn('Faça login para ver e lançar os dados','warn');
+  afterAuth();
+}
+async function recarregar(){
+  try{ await carregar(); escolherPeriodoPadrao(); setConn('Conectado ao Back4App','ok'); }
+  catch(e){ setConn('Erro ao ler o Back4App: '+(e.message||e),'bad'); }
+}
+async function login(user,pass){ state.user = await Parse.User.logIn(user,pass); await recarregar(); afterAuth(); }
+async function logout(){ await Parse.User.logOut(); state.user=null; state.analistas=TEAM.map(([nome,nivel])=>({id:slug(nome),nome,nivel})); state.dados={}; setConn('Faça login para ver e lançar os dados','warn'); afterAuth(); }
+
+async function salvarLote(periodo, linhas){   // linhas: [{aid, valores:{flr:..}}]
+  if (DEMO){ for(const l of linhas){ const d=(state.dados[l.aid]=state.dados[l.aid]||{}); d[periodo]={...l.valores}; } render(); return linhas.length; }
+  const objs=[];
+  for (const l of linhas){
+    const key=l.aid+'|'+periodo; let o=state.objs[key];
+    if (!o){ o=new Parse.Object('Medicao'); o.set('analistaId',l.aid); o.set('periodo',periodo); }
+    for (const k of KEYS){ if (l.valores[k]===undefined) o.unset(k); else o.set(k,l.valores[k]); }
+    o.set('atualizadoPor', state.user.get('username'));
+    objs.push(o);
+  }
+  await Parse.Object.saveAll(objs);
+  await recarregar(); render(); return objs.length;
+}
+async function cadastrarEquipe(){
+  if (DEMO||!CONFIGURED) return;
+  const existentes = new Set((await fetchAll('Analista')).map(o=>o.get('slug')||slug(o.get('nome'))));
+  const novos = TEAM.filter(([n])=>!existentes.has(slug(n))).map(([nome,nivel])=>{ const o=new Parse.Object('Analista'); o.set('nome',nome); o.set('nivel',nivel); o.set('slug',slug(nome)); o.set('ativo',true); return o; });
+  if (novos.length) await Parse.Object.saveAll(novos);
+  await recarregar(); render();
+}
+
+/* =====================================================================
+   4) INTERFACE
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+function h(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})){ if(k==='class') e.className=v; else if(k.startsWith('on')) e.addEventListener(k.slice(2),v); else if(v!==false&&v!==null&&v!==undefined) e.setAttribute(k,v===true?'':v); }
+  for (const c of kids.flat()){ if(c===null||c===undefined||c===false) continue; e.append(c.nodeType?c:document.createTextNode(String(c))); }
+  return e;
+}
+const fmt = (v,d=1)=> v===null||v===undefined||isNaN(v)?'—':(+v).toFixed(d).replace('.',',');
+const charts = {};
+function chart(id, cfg){ if(charts[id]) charts[id].destroy(); const c=document.getElementById(id); if(c) charts[id]=new Chart(c,cfg); }
+function setConn(t,cls){ const c=$('#conn'); c.textContent=t; c.className='chip '+(cls||''); }
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const bandColor = v => v>=state.cfg.metaIES?css('--ok'):css('--bad');   // IES: meta única de 78
+const iesClass = v => v===null||v===undefined?'':v>=state.cfg.metaIES?'ok':'bad';
+function metaClass(k,v){ const f=faixa(k,v,state.cfg); return f==='topo'?'ok':f==='saudavel'?'mid':f==='abaixo'?'bad':''; }
+const tip = (k,v)=>faixaNome(k,v,state.cfg);
+
+const ui = {tab:'time', periodo:`${OPTIONS.anoAtual}-ANO`, nivel:'', analista:'', ano:OPTIONS.anoAtual, lAnalista:'', lPeriodo:''};
+
+function select(id,label,opts,val,onchange){
+  const s=h('select',{id,onchange:e=>onchange(e.target.value)}, opts.map(o=>h('option',{value:o.v,selected:o.v===val},o.t)));
+  return h('label',{},label,s);
+}
+
+function renderTime(){
+  const root=$('#tab-time'); root.replaceChildren();
+  const niveis=[...new Set(state.analistas.map(a=>a.nivel).filter(Boolean))].sort();
+  root.append(h('div',{class:'bar'},
+    select('f-per','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.periodo,v=>{ui.periodo=v;render();}),
+    select('f-niv','Nível',[{v:'',t:'Todos'},...niveis.map(n=>({v:n,t:n}))],ui.nivel,v=>{ui.nivel=v;render();})));
+  const rows = state.analistas.filter(a=>!ui.nivel||a.nivel===ui.nivel).map(a=>{
+    const r=(state.dados[a.id]||{})[ui.periodo]; const c=calcIES(r,state.cfg,a.nivel); return {a,r,ap:aplicaveis(a.nivel,state.cfg),...c};
+  });
+  const com = rows.filter(x=>x.ies!==null).sort((x,y)=>y.ies-x.ies);
+  const media = com.length? com.reduce((s,x)=>s+x.ies,0)/com.length : null;
+  if (DEMO) root.append(h('div',{class:'msg bad'},'DADOS FICTÍCIOS (modo demonstração) — gerados aleatoriamente, não representam nenhum analista real. Configure o Back4App para ver dados reais.'));
+  const acima = com.filter(x=>x.ies>=state.cfg.metaIES).length;
+  root.append(h('div',{class:'cards'},
+    card('IES médio do time', fmt(media,1), media===null?'sem dados no período':(media>=state.cfg.metaIES?'dentro da meta':'abaixo da meta')+` de ${state.cfg.metaIES}`),
+    card(`Na meta de IES (≥ ${state.cfg.metaIES})`, com.length?`${acima}/${com.length}`:'—', 'analistas com dados'),
+    card('Maior IES', com.length?fmt(com[0].ies,1):'—', com.length?com[0].a.nome:''),
+    card('Menor IES', com.length?fmt(com[com.length-1].ies,1):'—', com.length?com[com.length-1].a.nome:''),
+    card('Analistas sem dados', String(rows.length-com.length), `de ${rows.length} no filtro`)));
+  if(!rows.length){ root.append(h('div',{class:'box empty'}, state.user?'Nenhum analista cadastrado. Use a aba "Lançar dados" para cadastrar a equipe.':'Faça login para ver os dados.')); return; }
+  root.append(h('div',{class:'box'},h('h2',{},'IES por analista'),h('div',{class:'canvas'},h('canvas',{id:'ch-time'}))));
+  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES médio do time — ${ui.ano}`),h('div',{class:'canvas',style:'height:260px'},h('canvas',{id:'ch-evo'}))));
+  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Analista'),h('th',{},'Nível'),h('th',{},'IES'),...KEYS.map(k=>h('th',{},LABEL[k])),h('th',{},'Ind. preench.'))),
+    h('tbody',{},[...com,...rows.filter(x=>x.ies===null)].map(x=>h('tr',{},
+      h('td',{},x.a.nome),h('td',{},x.a.nivel||'—'),
+      h('td',{class:'ies '+iesClass(x.ies)},fmt(x.ies,1)),
+      ...KEYS.map(k=>h('td',{class:metaClass(k,x.r&&x.r[k]),title:tip(k,x.r&&x.r[k])},fmt(x.r&&x.r[k],1))),
+      h('td',{},x.n?`${x.n}/${x.de}${x.n<x.de?' (parcial)':''}`:'—')))));
+  root.append(h('div',{class:'box'},h('h2',{},'Detalhamento'),h('div',{class:'tw'},t),
+    h('div',{class:'note'},`IES: verde = ≥ ${state.cfg.metaIES} (meta); vermelho = abaixo. Indicadores (benchmark do Detalhamento): verde = Excelente ou Alta performance; amarelo = Saudável; vermelho = abaixo do saudável. IES com menos de 6 indicadores é parcial (marcado como parcial) e não é comparável.`)));
+  const evo = Array.from({length:12},(_,i)=>{ const p=`${ui.ano}-${String(i+1).padStart(2,'0')}`;
+    const v=state.analistas.filter(a=>!ui.nivel||a.nivel===ui.nivel).map(a=>calcIES((state.dados[a.id]||{})[p],state.cfg,a.nivel).ies).filter(x=>x!==null);
+    return v.length? +(v.reduce((s,x)=>s+x,0)/v.length).toFixed(2) : null; });
+  chart('ch-evo',{type:'line',data:{labels:MESES,datasets:[{label:'IES médio',data:evo,borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},
+    {label:`Meta ${state.cfg.metaIES}`,data:MESES.map(()=>state.cfg.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
+    options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
+  chart('ch-time',{type:'bar',data:{labels:com.map(x=>x.a.nome),datasets:[{label:'IES',data:com.map(x=>+x.ies.toFixed(2)),backgroundColor:com.map(x=>bandColor(x.ies))}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{min:0,max:100}},plugins:{legend:{display:false}}}});
+}
+function card(k,v,s){ return h('div',{class:'card'},h('div',{class:'k'},k),h('div',{class:'v'},v),h('div',{class:'s'},s||'')); }
+
+function renderAnalista(){
+  const root=$('#tab-analista'); root.replaceChildren();
+  if(!state.analistas.length){ root.append(h('div',{class:'box empty'},'Sem analistas para exibir.')); return; }
+  if(!state.analistas.some(a=>a.id===ui.analista)) ui.analista=state.analistas[0].id;
+  const a=state.analistas.find(x=>x.id===ui.analista); const d=state.dados[a.id]||{};
+  root.append(h('div',{class:'bar'},
+    select('a-sel','Analista',state.analistas.map(x=>({v:x.id,t:`${x.nome} (${x.nivel||'—'})`})),ui.analista,v=>{ui.analista=v;render();}),
+    select('a-ano','Ano',[OPTIONS.anoAtual,OPTIONS.anoAtual-1].map(y=>({v:String(y),t:String(y)})),String(ui.ano),v=>{ui.ano=+v;render();})));
+  const ms = Array.from({length:12},(_,i)=>`${ui.ano}-${String(i+1).padStart(2,'0')}`);
+  const ap_ = aplicaveis(a.nivel,state.cfg), soma_ = ap_.reduce((t,k)=>t+state.cfg.pesos[k],0);
+  const serie = ms.map(p=>calcIES(d[p],state.cfg,a.nivel).ies);
+  const acum = calcIES(d[`${ui.ano}-ANO`],state.cfg,a.nivel);
+  const vals = serie.filter(v=>v!==null);
+  root.append(h('div',{class:'cards'},
+    card(`IES acumulado ${ui.ano}`, fmt(acum.ies,1), acum.n?`${acum.n}/${acum.de} indicadores · meta ${state.cfg.metaIES}`:'não lançado'),
+    card('Melhor mês', vals.length?fmt(Math.max(...vals),1):'—', vals.length?MESES[serie.indexOf(Math.max(...vals))]:''),
+    card('Pior mês', vals.length?fmt(Math.min(...vals),1):'—', vals.length?MESES[serie.indexOf(Math.min(...vals))]:''),
+    card('Meses com dados', String(vals.length), 'de 12')));
+  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES — ${a.nome}`),h('div',{class:'canvas'},h('canvas',{id:'ch-an'}))));
+  const t=h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Benchmark'),h('th',{},'Peso'),...MESES.map(m=>h('th',{},m)),h('th',{},'Ano'))),
+    h('tbody',{},KEYS.map(k=>h('tr',{},h('td',{},FULL[k]+(ap_.includes(k)?'':' (opcional neste nível)')),h('td',{style:'text-align:left;white-space:normal;font-size:12px;color:var(--muted);min-width:210px'},state.cfg.bench[k].texto),h('td',{},Math.round(state.cfg.pesos[k]*100)+'%'),
+      ...[...ms,`${ui.ano}-ANO`].map(p=>{const v=d[p]&&d[p][k]; return h('td',{class:metaClass(k,v),title:tip(k,v)},fmt(v,1));}))),
+      h('tr',{},h('td',{class:'ies'},'IES'),h('td',{}),h('td',{}),...serie.map(v=>h('td',{class:'ies '+iesClass(v)},fmt(v,1))),h('td',{class:'ies '+iesClass(acum.ies)},fmt(acum.ies,1)))));
+  root.append(h('div',{class:'box'},h('h2',{},'Indicadores mês a mês'),h('div',{class:'tw'},t),h('div',{class:'note'},'Cores pelo benchmark do Detalhamento: verde = Excelente ou Alta performance; amarelo = Saudável; vermelho = abaixo do saudável. IES: meta ≥ '+state.cfg.metaIES+'.')));
+  chart('ch-an',{type:'line',data:{labels:MESES,datasets:[{label:'IES',data:serie.map(v=>v===null?null:+v.toFixed(2)),borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},{label:'Meta IES',data:MESES.map(()=>state.cfg.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
+    options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
+}
+
+function renderLancar(){
+  const root=$('#tab-lancar'); root.replaceChildren();
+  if(!state.user){ root.append(h('div',{class:'box empty'},'Faça login para lançar dados.')); return; }
+  if(!state.analistas.length || (!DEMO && !Object.keys(state.anaObjs).length)){
+    root.append(h('div',{class:'box'},h('h2',{},'Nenhum analista cadastrado no Back4App'),
+      h('p',{},'Cadastre a equipe UNLT (17 pessoas) com um clique. Depois é só lançar os indicadores de cada mês.'),
+      h('button',{class:'btn',onclick:async e=>{e.target.disabled=true;try{await cadastrarEquipe();}catch(err){root.append(h('div',{class:'msg bad'},'Erro: '+(err.message||err)));}}},'Cadastrar equipe UNLT')));
+    return;
+  }
+  if(!ui.lPeriodo) ui.lPeriodo=periodos[1].id;
+  const inputs={};   // aid -> {k: input}
+  const orig=(aid)=> (state.dados[aid]||{})[ui.lPeriodo]||{};
+  const marcar=(aid,tr)=>{ const mudou=KEYS.some(k=>{ const v=inputs[aid][k].value.trim()===''?undefined:Number(inputs[aid][k].value.replace(',','.')); return v!==orig(aid)[k]; }); tr.classList.toggle('chg',mudou); };
+  const tbody=h('tbody',{},state.analistas.map(a=>{
+    inputs[a.id]={}; const tr=h('tr',{},h('td',{},`${a.nome} `,h('span',{class:'chip'},a.nivel||'—')),
+      ...KEYS.map(k=>{ const i=h('input',{type:'text',inputmode:'decimal',value:orig(a.id)[k]!==undefined?String(orig(a.id)[k]).replace('.',','):'',oninput:()=>marcar(a.id,tr)}); inputs[a.id][k]=i; return h('td',{},i); }));
+    return tr; }));
+  const msg=h('div',{id:'l-msg'});
+  const ta=h('textarea',{placeholder:'Cole aqui do Excel: Analista, FLR, CSAT, Reabertos, TME, SLA, Backlog (uma linha por analista, colunas separadas por TAB ou ;)'});
+  const aplicar=()=>{
+    const porNome={}; state.analistas.forEach(a=>porNome[norm(a.nome)]=a.id);
+    let ok=0, sem=[];
+    for(const linha of ta.value.split(/\r?\n/)){
+      if(!linha.trim()) continue;
+      const c=linha.split(/\t|;/).map(x=>x.trim()); const aid=porNome[norm(c[0])];
+      if(!aid){ if(norm(c[0])!=='analista') sem.push(c[0]); continue; }
+      KEYS.forEach((k,i)=>{ const v=(c[i+1]||'').replace('%','').trim(); inputs[aid][k].value=v; });
+      inputs[aid][KEYS[0]].dispatchEvent(new Event('input')); ok++;
+    }
+    msg.replaceChildren(h('div',{class:'msg '+(sem.length?'bad':'ok')},`${ok} linha(s) aplicada(s) — confira e clique em Salvar.`+(sem.length?` Não reconhecidos: ${sem.join(', ')}`:'')));
+  };
+  root.append(h('div',{class:'box'},h('h2',{},'Lançamento em lote'),
+    h('div',{class:'bar'},select('l-pe','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.lPeriodo,v=>{ui.lPeriodo=v;render();})),
+    h('div',{class:'note',style:'margin:0 0 8px'},'Percentuais sem o símbolo % (ex.: 91,7) e TME em dias (ex.: 10,2). Célula vazia = indicador não lançado. Linhas alteradas ficam destacadas.'),
+    h('div',{class:'tw'},h('table',{class:'lote'},h('thead',{},h('tr',{},h('th',{},'Analista'),...KEYS.map(k=>h('th',{},LABEL[k])))),tbody)),
+    msg,
+    h('div',{style:'margin-top:10px;display:flex;gap:8px'},h('button',{class:'btn',onclick:async e=>{
+      const linhas=[];
+      for(const a of state.analistas){
+        const valores={}; let alguma=false, mudou=false;
+        for(const k of KEYS){ const t=inputs[a.id][k].value.trim().replace(',','.'); if(t!==''){ const n=Number(t); if(isNaN(n)){ msg.replaceChildren(h('div',{class:'msg bad'},`Valor inválido em ${a.nome} (${LABEL[k]}): "${t}"`)); return; } valores[k]=n; alguma=true; } if(valores[k]!==orig(a.id)[k]) mudou=true; }
+        if(mudou && (alguma || state.objs[a.id+'|'+ui.lPeriodo])) linhas.push({aid:a.id,valores});
+      }
+      if(!linhas.length){ msg.replaceChildren(h('div',{class:'msg ok'},'Nada alterado para salvar.')); return; }
+      e.target.disabled=true;
+      try{ const n=await salvarLote(ui.lPeriodo,linhas); const m2=$('#l-msg'); if(m2) m2.replaceChildren(h('div',{class:'msg ok'},`${n} analista(s) salvo(s).`)); }
+      catch(err){ msg.replaceChildren(h('div',{class:'msg bad'},'Não foi possível salvar: '+(err.message||err))); e.target.disabled=false; }
+    }},'Salvar período'))),
+    h('div',{class:'box'},h('h2',{},'Colar do Excel'),ta,h('div',{style:'margin-top:8px'},h('button',{class:'btn ghost',onclick:aplicar},'Preencher a tabela com o que colei'))));
+}
+
+function renderRegras(){
+  const root=$('#tab-regras'); root.replaceChildren();
+  const c=state.cfg;
+  root.append(h('div',{class:'box'},h('h2',{},'Como o IES é calculado'),
+    h('p',{},`IES = soma das notas (0–100) de cada indicador × o peso. Mesmas regras do modelo em Excel. Meta: IES ≥ ${c.metaIES}.`),
+    h('p',{},'Indicadores esperados por nível: N1 e N1/N2 Peticiona, os 6; N2, sem FLR e sem TME; N3, sem FLR. Os que não são esperados no nível são opcionais: se ficarem em branco, ficam de fora e os pesos dos demais são redistribuídos na mesma proporção (o IES continua de 0 a 100); se forem preenchidos, entram no cálculo. Tech Leads não entram no IES.'),
+    h('div',{class:'tw'},h('table',{},h('thead',{},h('tr',{},h('th',{},'Indicador'),h('th',{},'Peso'),h('th',{},'Benchmark'),h('th',{},'Nota'))),
+      h('tbody',{},[
+        ['flr','Percentual direto: nota = valor.'],['csat','Percentual direto: nota = valor.'],
+        ['reab',`Invertida e linear: ≤ ${c.lim.reab[0]*100}% = 100 pts; ≥ ${c.lim.reab[1]*100}% = 0 pt.`],
+        ['tme',`Invertida e linear: ≤ ${c.lim.tme[0]} dias = 100 pts; ≥ ${c.lim.tme[1]} dias = 0 pt.`],
+        ['sla','Percentual direto: nota = valor.'],
+        ['back',`Linear: ≥ ${c.lim.back[0]*100}% = 100 pts; ≤ ${c.lim.back[1]*100}% = 0 pt.`]
+      ].map(([k,t])=>h('tr',{},h('td',{},FULL[k]),h('td',{},Math.round(c.pesos[k]*100)+'%'),h('td',{style:'text-align:left;white-space:normal'},c.bench[k].texto),h('td',{style:'text-align:left;white-space:normal'},t)))))),
+    h('div',{class:'note'},'Pesos, limites, benchmarks e a lista de indicadores por nível ficam no bloco // <core> do index.html. Meta do IES total: ≥ '+c.metaIES+'.')));
+}
+
+function render(){
+  $('#tab-time').hidden = ui.tab!=='time'; $('#tab-analista').hidden = ui.tab!=='analista';
+  $('#tab-lancar').hidden = ui.tab!=='lancar'; $('#tab-regras').hidden = ui.tab!=='regras';
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===ui.tab));
+  if(ui.tab==='time') renderTime(); else if(ui.tab==='analista') renderAnalista(); else if(ui.tab==='lancar') renderLancar(); else renderRegras();
+}
+function afterAuth(){
+  const who=$('#who'), li=$('#loginBtn'), lo=$('#logoutBtn');
+  who.hidden=!state.user; who.textContent=state.user?(state.user.get?state.user.get('username'):state.user.username):'';
+  li.hidden = DEMO || !CONFIGURED || !!state.user; lo.hidden = DEMO || !CONFIGURED || !state.user;
+  render();
+}
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{ui.tab=b.dataset.tab;render();}));
+$('#loginBtn').addEventListener('click',()=>$('#dlg').showModal());
+$('#cancelLogin').addEventListener('click',()=>$('#dlg').close());
+$('#logoutBtn').addEventListener('click',()=>logout());
+$('#loginForm').addEventListener('submit',async e=>{
+  e.preventDefault(); const err=$('#loginErr'); err.hidden=true;
+  try{ await login($('#em').value,$('#pw').value); $('#pw').value=''; $('#dlg').close(); }
+  catch(x){ err.textContent='Não foi possível entrar: '+(x.message||x); err.hidden=false; }
+});
+window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>render());
+render(); connect();
+</script>
+</body>
+</html>
