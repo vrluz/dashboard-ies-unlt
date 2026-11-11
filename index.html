@@ -97,12 +97,14 @@ textarea{width:100%;min-height:90px;font:12px/1.4 var(--font-mono);padding:10px;
 <nav id="tabs">
   <button data-tab="time" class="on">Visão do time</button>
   <button data-tab="analista">Analista</button>
+  <button data-tab="techleaders">Tech Leaders</button>
   <button data-tab="lancar">Lançar dados</button>
   <button data-tab="regras">Regras do IES</button>
 </nav>
 <main>
   <section id="tab-time"></section>
   <section id="tab-analista" hidden></section>
+  <section id="tab-techleaders" hidden></section>
   <section id="tab-lancar" hidden></section>
   <section id="tab-regras" hidden></section>
 </main>
@@ -142,8 +144,8 @@ const OPTIONS = { anoAtual: 2026 };
    ===================================================================== */
 // <core>
 const KEYS = ['flr','csat','reab','tme','sla','back'];
-const LABEL = {flr:'FLR (%)',csat:'CSAT (%)',reab:'Reabertos (%)',tme:'TME P85 (dias)',sla:'SLA Solução (%)',back:'SLA Backlog (%)'};
-const FULL = {flr:'FLR - First Level Resolution (%)',csat:'CSAT - Customer Satisfaction Score (%)',reab:'Tickets reabertos (%)',tme:'TME - Tempo de Resolução - P85 (dias)',sla:'% SLA de Solução (%)',back:'SLA de Solução por Backlog (%)'};
+const LABEL = {flr:'FLR (%)',csat:'CSAT (%)',reab:'Reabertos (%)',tme:'Tempo Resolução P85 (dias)',sla:'SLA Solução (%)',back:'SLA Backlog (%)'};
+const FULL = {flr:'FLR - First Level Resolution (%)',csat:'CSAT - Customer Satisfaction Score (%)',reab:'Tickets reabertos (%)',tme:'Tempo de Resolução de Tickets — P85 (dias)',sla:'% SLA de Solução (%)',back:'SLA de Solução por Backlog (%)'};
 // Campos de contagem extraídos do mesmo Painel de Suporte do Projuris.
 // 'back' = % SLA de solução por backlog (existente); 'backlogTickets' = quantidade no backlog (novo).
 const EXTRA_KEYS = ['ticketsFechados','backlogTickets','slaPrimeira'];
@@ -154,11 +156,11 @@ FULL.ticketsFechados = 'Tickets Fechados (quantidade)';
 FULL.backlogTickets = 'Backlog de Tickets (quantidade)';
 LABEL.slaPrimeira = 'SLA 1ª Resposta (%)';
 FULL.slaPrimeira = '% SLA de 1ª Resposta — contrato N3 (meta 99%)';
-const N2_KEYS = ['ticketsFechados','csat','reab','backlogTickets'];
-const N2_CTX = ['sla','back','tme']; // oficiais, apenas contexto, sem nota individual
+const N2_KEYS = ['ticketsFechados','csat','reab','backlogTickets','tme'];
+const N2_CTX = ['sla','back']; // oficiais, apenas contexto, sem nota individual. P85 volta a pontuar no N2.
 const N2_ENTRY = [...N2_KEYS,...N2_CTX];
 // N3: somente indicadores oficiais; pesos são PROPOSTA gerencial, não constam do PDF oficial.
-// N3: nove indicadores oficiais. FLR pode avaliar o primeiro atendimento DIRETO do N3
+// N3: nove indicadores oficiais, incluindo SLA Backlog e P85 com pesos. FLR pode avaliar o primeiro atendimento DIRETO do N3
 // a clientes prioritários, se o BI extrair a métrica sem misturar apoio ao N2.
 // SLA 1ª resposta é contratual, meta 99%, e deve ser informado na avaliação N3.
 const N3_KEYS = ['slaPrimeira','sla','flr','back','csat','reab','ticketsFechados','backlogTickets','tme'];
@@ -176,20 +178,22 @@ const DEFAULT_CFG = {
   pesos:{flr:.20,csat:.20,reab:.15,tme:.15,sla:.20,back:.10},
   // PESOS GERENCIAIS PROPOSTOS (o painel oficial NÃO estabelece pesos N2/N3).
   // Não introduzimos indicadores novos: os campos são os do Painel de Suporte Projuris.
-  n2Pesos:{ticketsFechados:.25,csat:.35,reab:.25,backlogTickets:.15},
-  n3Pesos:{slaPrimeira:.25,sla:.20,flr:.10,back:.10,csat:.10,reab:.10,ticketsFechados:.05,backlogTickets:.05,tme:.05},
+  n2Pesos:{ticketsFechados:.20,csat:.30,reab:.20,backlogTickets:.15,tme:.15},
+  n3Pesos:{slaPrimeira:.25,sla:.15,flr:.10,back:.10,csat:.10,reab:.05,ticketsFechados:.05,backlogTickets:.05,tme:.15},
   // Benchmarks de volume PROVISÓRIOS, não oficiais: ajuste quando houver histórico por analista.
   // Tickets fechados: zero = 0 pontos, 20 ou mais/mês = 100 pontos.
   // Backlog bruto: até 5 = 100 pontos, 25 ou mais = 0 pontos.
   volumeNota:{ticketsFechados100:20,backlog100:5,backlog0:25},
   n2Bench:{
+    tme:{dir:'down',saud:12,top:8,topNome:'Excelente',texto:'Tempo de Resolução P85: excelente ≤8 dias; saudável >8–12 dias; abaixo do saudável >12 dias. Pontuação: ≤8 = 100; ≥18 = 0.'},
     ticketsFechados:{dir:'up',saud:12,top:20,topNome:'Referência proposta',texto:'PROPOSTA (mensal): atenção <12; saudável 12–19; destaque ≥20 tickets fechados.'},
     backlogTickets:{dir:'down',saud:12,top:5,topNome:'Referência proposta',texto:'PROPOSTA (posição mensal): destaque ≤5; saudável 6–12; atenção >12 tickets em aberto.'}
   },
-  // Referências do PDF: SLA Solução >95%, CSAT >93%, FLR geral >95%.
+  // Referências do PDF: SLA Solução >95%, CSAT >93%, FLR geral >95%. P85 é o Tempo de Resolução (não o TME do chat).
   // Meta contratual do SLA de primeira resposta N3 = 99%, INFORMADA PELA GESTORA.
   // Os limites de cor abaixo são proposta de visualização, NÃO metas oficiais adicionais.
   n3Bench:{
+    tme:{dir:'down',saud:12,top:8,topNome:'Excelente',texto:'Tempo de Resolução P85: excelente ≤8 dias; saudável >8–12 dias; abaixo do saudável >12 dias. Pontuação: ≤8 = 100; ≥18 = 0.'},
     sla:{dir:'up',saud:90,top:95,topNome:'Referência de SLA',texto:'Meta geral do painel: acima de 95%. Faixa visual sugerida: 90–<95% atenção; ≥95% destaque.'},
     csat:{dir:'up',saud:85,top:93,topNome:'Referência de CSAT',texto:'Meta oficial do painel: acima de 93%. Faixa visual sugerida: 85–<93% atenção; ≥93% destaque.'},
     ticketsFechados:{dir:'up',saud:12,top:20,topNome:'Referência proposta',texto:'PROPOSTA (mensal): atenção <12; saudável 12–19; destaque ≥20 tickets fechados.'},
@@ -210,7 +214,7 @@ const DEFAULT_CFG = {
   },
   metaIES:78,                                         // IES mínimo esperado (aba IES_Metas_Bônus, coluna UNLT)
   naoSeAplica:{'N2':['flr','tme'],'N3':[]}, // N3 agora avalia FLR no atendimento direto prioritário; N1 mantém regra legada
-  niveisFora:['Tech Lead']                            // níveis que não entram no IES (não atendem a fila)
+  niveisFora:['Tech Lead','Tech Leader','Tech Leaders']                            // níveis que não entram no IES (não atendem a fila)
 };
 function benchPara(k,cfg,nivel){return (isN3(nivel)&&cfg.n3Bench[k])||(isN2(nivel)&&cfg.n2Bench[k])||cfg.bench[k];}
 function faixa(k, v, cfg, nivel){   // 'topo' | 'saudavel' | 'abaixo' | null
@@ -284,6 +288,16 @@ function valoresParaNotaAnual(agregado){
       Classe Medicao : analistaId (slug), periodo (ex.: "2026-07"), flr, csat, reab, tme, sla, back, ticketsFechados, backlogTickets, slaPrimeira
       O acumulado do ano é calculado a partir dos meses; não é gravado no Back4App.
    ===================================================================== */
+// Cada Tech Leader acompanha a própria carteira; os N1 estão nas DUAS carteiras.
+// Jussara, Felipe e Max são exclusivos de Alessandro; o restante dos N2 e N3 é de Douglas.
+// Não criamos Medicao para os líderes e não os incluímos no IES geral UNLT.
+const TECH_LEADERS = [
+  {id:'alessandro', nome:'Alessandro'},
+  {id:'douglas', nome:'Douglas Cubas'}
+];
+const EXCLUSIVOS_ALESSANDRO = new Set([
+  'jussara-wiemes','felipe-da-silva-luz','max-filipe-macedo-braga'
+]);
 const TEAM = [
  ["Gustavo Gaeta","N1"],["Humberto Ferro","N1"],["Lucas Rodrigues","N1"],["Maria Vitória Muniz","N1"],
  ["Jordânia Vitória","N1"],["Leonardo de Souza Fernandes","N1"],["Felipe da Silva Luz","N1/N2 Peticiona"],
@@ -329,10 +343,63 @@ function consolidarAno(dadosAnalista, ano){
   return {valores:meses?valores:null,meses,qtd};
 }
 
+// Consolidado de IES dos três níveis — NÃO soma as notas nem mistura indicadores.
+// Cada analista tem seu IES calculado segundo os pesos de seu próprio nível.
+// A média de cada nível considera apenas notas COMPLETAS; o IES geral atribui
+// 1/3 a N1, 1/3 a N2 e 1/3 a N3 (sem favorecer o grupo com mais analistas).
+// "N1/N2 Peticiona" usa o modelo N1 definido no dashboard.
+function grupoIES(nivel){return ['Tech Lead','Tech Leader','Tech Leaders'].includes(nivel)?null:isN2(nivel)?'N2':isN3(nivel)?'N3':'N1';}
+// Retorna as carteiras ativas; usa o nome do analista como referência,
+// pois o ID salvo no Back4App pode ser diferente do slug usado no pacote.
+function lideresDoAnalista(a){
+  if(!grupoIES(a.nivel)) return [];
+  if(a.nivel==='N1') return ['alessandro','douglas'];
+  const nome=slug(a.demoNomeOriginal||a.nome);
+  if(EXCLUSIVOS_ALESSANDRO.has(nome)) return ['alessandro'];
+  return ['douglas'];
+}
+function analistasDoLider(id){return state.analistas.filter(a=>lideresDoAnalista(a).includes(id));}
+function resumirIESCarteira(periodo,id){
+  return resumirIESGeral(periodo,analistasDoLider(id),false);
+}
+function resumirIESGeral(periodo,analistas=state.analistas,exigirTresNiveis=true){
+  const anual=periodo.endsWith('-ANO'),ano=periodo.slice(0,4);
+  const nomes=['N1','N2','N3'];
+  const grupos=Object.fromEntries(nomes.map(n=>[n,{nivel:n,completos:[],parciais:0,semDados:0,total:0,media:null}]));
+  for(const a of analistas){
+    const nivel=grupoIES(a.nivel);
+    if(!nivel) continue; // Tech Leaders nunca entram no cálculo dos analistas.
+    const g=grupos[nivel];
+    g.total++;
+    const dados=state.dados[a.id]||{};
+    const consolidado=anual?consolidarAno(dados,ano):null;
+    const r=anual?valoresParaNotaAnual(consolidado):dados[periodo];
+    const resultado=calcIES(r,state.cfg,a.nivel);
+    if(resultado.ies===null||!Number.isFinite(resultado.ies))g.semDados++;
+    else if(resultado.parcial)g.parciais++;
+    else g.completos.push(resultado.ies);
+  }
+  for(const n of nomes){
+    const g=grupos[n];
+    if(g.completos.length)g.media=g.completos.reduce((s,v)=>s+v,0)/g.completos.length;
+  }
+  // UNLT exige N1, N2 e N3. Cada líder exige apenas os níveis que possui.
+  // Ex.: Alessandro tem N1 + N2 e Douglas tem N1 + N2 + N3.
+  const niveisConsiderados=exigirTresNiveis?nomes:nomes.filter(n=>grupos[n].total>0);
+  const presentes=niveisConsiderados.filter(n=>grupos[n].media!==null);
+  const geral=niveisConsiderados.length&&presentes.length===niveisConsiderados.length
+    ? presentes.reduce((s,n)=>s+grupos[n].media,0)/niveisConsiderados.length : null;
+  const mediaDisponivel=presentes.length?presentes.reduce((s,n)=>s+grupos[n].media,0)/presentes.length:null;
+  return {grupos,geral,mediaDisponivel,niveisComDados:presentes.length,niveisConsiderados,
+    completos:nomes.reduce((s,n)=>s+grupos[n].completos.length,0),
+    parciais:nomes.reduce((s,n)=>s+grupos[n].parciais,0),
+    semDados:nomes.reduce((s,n)=>s+grupos[n].semDados,0)};
+}
+
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function seedDemo(){
   const rnd = mulberry(42);
-  state.analistas = TEAM.map(([,nivel],i)=>({id:'demo-'+(i+1),nome:'Analista Demo '+String(i+1).padStart(2,'0'),nivel}));
+  state.analistas = TEAM.map(([nome,nivel],i)=>({id:'demo-'+(i+1),nome:'Analista Demo '+String(i+1).padStart(2,'0'),demoNomeOriginal:nome,nivel}));
   for (const a of state.analistas){
     const base = {flr:82+rnd()*14,csat:84+rnd()*11,reab:2.5+rnd()*3.5,tme:6+rnd()*8,sla:86+rnd()*10,back:45+rnd()*35};
     state.dados[a.id] = {};
@@ -439,11 +506,144 @@ const iesClass = v => v===null||v===undefined?'':v>=state.cfg.metaIES?'ok':'bad'
 function metaClass(k,v,nivel){ const f=faixa(k,v,state.cfg,nivel); return f==='topo'?'ok':f==='saudavel'?'mid':f==='abaixo'?'bad':''; }
 const tip = (k,v,nivel)=>faixaNome(k,v,state.cfg,nivel);
 
-const ui = {tab:'time', periodo:`${OPTIONS.anoAtual}-ANO`, nivel:'', analista:'', ano:OPTIONS.anoAtual, lAnalista:'', lPeriodo:''};
+const ui = {tab:'time', periodo:`${OPTIONS.anoAtual}-ANO`, nivel:'', analista:'', ano:OPTIONS.anoAtual, lAnalista:'', lPeriodo:'', techLeader:'alessandro'};
 
 function select(id,label,opts,val,onchange){
   const s=h('select',{id,onchange:e=>onchange(e.target.value)}, opts.map(o=>h('option',{value:o.v,selected:o.v===val},o.t)));
   return h('label',{},label,s);
+}
+
+function renderConsolidadoGeral(root){
+  const c=state.cfg,anual=ui.periodo.endsWith('-ANO');
+  const resumo=resumirIESGeral(ui.periodo);
+  const nomes=['N1','N2','N3'];
+  const invalidos=nomes.filter(n=>resumo.grupos[n].media===null);
+  const legendaCompleto='Somente analistas com todos os indicadores pontuáveis preenchidos entram no cálculo.';
+  root.append(h('div',{class:'box'},
+    h('h2',{},`IES geral UNLT — ${anual?'acumulado de '+ui.periodo.slice(0,4):periodos.find(p=>p.id===ui.periodo)?.label||ui.periodo}`),
+    h('p',{},'Consolidado entre N1, N2 e N3: primeiro calculamos o IES de cada analista com as regras do seu nível; em seguida, a média dos analistas completos por nível; por fim, a média simples dos três níveis (33,33% cada). N1/N2 Peticiona integra N1.'),
+    h('div',{class:'cards'},
+      card('IES GERAL — N1 + N2 + N3',fmt(resumo.geral,1),resumo.geral!==null?'Média dos 3 níveis com o mesmo peso':'Aguardando IES completo dos 3 níveis'),
+      ...nomes.map(n=>{const g=resumo.grupos[n];return card(`IES ${n}`,fmt(g.media,1),`${g.completos.length} de ${g.total} analista(s) com nota completa`);})),
+    h('div',{class:'tw'},h('table',{},
+      h('thead',{},h('tr',{},...['Nível','IES médio','Notas completas','Notas parciais','Sem dados'].map(x=>h('th',{},x)))),
+      h('tbody',{},nomes.map(n=>{const g=resumo.grupos[n];return h('tr',{},h('td',{},n==='N1'?'N1 (inclui N1/N2 Peticiona)':n),h('td',{class:'ies '+(g.media!==null?iesClass(g.media):'')},fmt(g.media,1)),h('td',{},`${g.completos.length}/${g.total}`),h('td',{},g.parciais),h('td',{},g.semDados));})))),
+    invalidos.length?h('div',{class:'msg warn'},`IES geral ainda não concluído: faltam notas completas em ${invalidos.join(', ')}. ${resumo.niveisComDados?`Prévia dos ${resumo.niveisComDados} nível(is) disponíveis: ${fmt(resumo.mediaDisponivel,1)} (não é o IES geral).`:''}`):null,
+    h('div',{class:'note'},`${legendaCompleto} O filtro de nível altera os detalhes abaixo, mas este consolidado sempre considera toda a equipe. A referência de IES ≥ ${c.metaIES} não é uma meta oficial específica de N2/N3.`)));
+  root.append(h('div',{class:'box'},
+    h('h2',{},'Tech Leaders — metas por carteira'),
+    h('p',{},'Cada líder acompanha os analistas de sua carteira. Os N1 entram nas duas carteiras; Jussara, Felipe e Max pertencem à carteira de Alessandro; os demais N2 e N3 à de Douglas. O IES geral UNLT continua independente, sem duplicar nenhum analista.'),
+    h('div',{class:'cards'},...TECH_LEADERS.map(lider=>{
+      const r=resumirIESCarteira(ui.periodo,lider.id);
+      const total=r.niveisConsiderados.reduce((s,n)=>s+r.grupos[n].total,0);
+      return card(lider.nome,fmt(r.geral,1),r.geral===null?'Aguardando notas completas dos níveis da carteira':`${r.completos}/${total} analistas com nota completa · ${r.niveisConsiderados.join(' + ')}`);
+    })),
+    h('div',{class:'note'},'Na aba Tech Leaders, selecione uma carteira para ver os analistas, a evolução mensal e os indicadores faltantes.')));
+  root.append(h('div',{class:'box'},
+    h('h2',{},'Comparação das médias por nível'),
+    h('div',{class:'canvas',style:'height:230px'},h('canvas',{id:'ch-geral-niveis'}))));
+  chart('ch-geral-niveis',{type:'bar',data:{labels:nomes,datasets:[{
+    label:'IES médio por nível',data:nomes.map(n=>resumo.grupos[n].media),
+    backgroundColor:nomes.map(n=>resumo.grupos[n].media===null?css('--muted'):bandColor(resumo.grupos[n].media))}]},
+    options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:false}}}});
+  if(anual){
+    const evolucao=Array.from({length:12},(_,i)=>resumirIESGeral(`${ui.periodo.slice(0,4)}-${String(i+1).padStart(2,'0')}`));
+    root.append(h('div',{class:'box'},h('h2',{},'Evolução do IES geral — N1, N2 e N3'),
+      h('div',{class:'canvas',style:'height:290px'},h('canvas',{id:'ch-geral-evolucao'})),
+      h('div',{class:'note'},'A linha do IES geral só aparece nos meses em que os três níveis têm resultados completos.')));
+    const series=[
+      {label:'IES geral (3 níveis)',data:evolucao.map(r=>r.geral),borderColor:css('--brand'),backgroundColor:css('--brand'),borderWidth:3},
+      ...nomes.map((n,i)=>({label:n,data:evolucao.map(r=>r.grupos[n].media),borderColor:['#2D9CDB','#27AE60','#9B51E0'][i],backgroundColor:['#2D9CDB','#27AE60','#9B51E0'][i]}))
+    ].map(x=>({...x,spanGaps:false,tension:.25}));
+    chart('ch-geral-evolucao',{type:'line',data:{labels:MESES,datasets:series},
+      options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
+  }
+}
+
+// Visão gerencial por carteira: o IES próprio de cada Tech Leader é a média
+// dos níveis presentes em SUA carteira (sem criar medições para líderes).
+function renderTechLeaders(){
+  const root=$('#tab-techleaders'); root.replaceChildren();
+  const c=state.cfg, referencia=c.metaIES;
+  if(!TECH_LEADERS.some(l=>l.id===ui.techLeader)) ui.techLeader=TECH_LEADERS[0].id;
+  const lider=TECH_LEADERS.find(l=>l.id===ui.techLeader);
+  root.append(h('div',{class:'bar'},
+    select('tl-per','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.periodo,v=>{ui.periodo=v;ui.ano=Number(v.slice(0,4));render();}),
+    select('tl-lider','Carteira do Tech Leader',TECH_LEADERS.map(l=>({v:l.id,t:l.nome})),ui.techLeader,v=>{ui.techLeader=v;render();})));
+  const ano=ui.periodo.slice(0,4),anual=ui.periodo.endsWith('-ANO');
+  const resumo=resumirIESCarteira(ui.periodo,lider.id);
+  const total=resumo.niveisConsiderados.reduce((s,n)=>s+resumo.grupos[n].total,0);
+  const faltantes=total-resumo.completos;
+  const cobertura=total?Math.round(resumo.completos/total*100):0;
+  const definitivo=resumo.geral!==null&&faltantes===0;
+
+  root.append(h('div',{class:'box'},
+    h('h2',{},'Metas vinculadas às carteiras dos Tech Leaders'),
+    h('p',{},'Os N1 são compartilhados entre Alessandro e Douglas Cubas. Jussara, Felipe e Max ficam com Alessandro; os demais N2 e os N3 ficam com Douglas. Cada carteira tem sua própria média, usando as regras individuais de cada analista.'),
+    h('div',{class:'cards'},...TECH_LEADERS.map(l=>{
+      const r=resumirIESCarteira(ui.periodo,l.id);
+      const t=r.niveisConsiderados.reduce((s,n)=>s+r.grupos[n].total,0);
+      return card('IES vinculado — '+l.nome,fmt(r.geral,1),r.geral===null?'Aguardando notas completas dos grupos':`${r.completos}/${t} analistas completos · ${r.niveisConsiderados.join(' + ')}`);
+    })),
+    h('div',{class:'note'},'O IES UNLT continua sendo calculado uma única vez por analista, independentemente da sobreposição de N1 nas carteiras. Referência gerencial do modelo: IES ≥ '+referencia+'.')));
+
+  root.append(h('div',{class:'box'},
+    h('h2',{},`Carteira de ${lider.nome} — ${total} analistas`),
+    h('div',{class:'cards'},
+      card('IES vinculado',fmt(resumo.geral,1),resumo.geral===null?'Aguardando nota completa em cada nível da carteira':definitivo?'Carteira completa':'Prévia: há lançamentos faltantes'),
+      card('Analistas completos',`${resumo.completos}/${total}`,`${cobertura}% da carteira`),
+      card('Notas parciais',String(resumo.parciais),'não entram na nota vinculada'),
+      card('Sem dados',String(resumo.semDados),'não entram na nota vinculada')),
+    resumo.geral===null?h('div',{class:'msg warn'},`Não há IES vinculado calculável: é necessária ao menos uma nota completa em cada nível desta carteira (${resumo.niveisConsiderados.join(', ')}).`):null,
+    faltantes>0?h('div',{class:'msg warn'},`Há ${faltantes} analista(s) sem nota completa nesta carteira. O resultado, quando disponível, é uma prévia.`):h('div',{class:'msg ok'},'Todos os analistas desta carteira possuem IES completo no período.'),
+    h('div',{class:'note'},`${lider.nome==='Alessandro'?'N1 (seis analistas), Jussara Wiemes (N2), Felipe e Max (N1/N2 Peticiona).':'N1 (seis analistas), demais N2 e todos os N3.'} Nenhum líder tem lançamentos próprios.`)));
+
+  const niveis=resumo.niveisConsiderados;
+  root.append(h('div',{class:'box'},
+    h('h2',{},`Resultado por nível — carteira de ${lider.nome}`),
+    h('div',{class:'tw'},h('table',{},
+      h('thead',{},h('tr',{},...['Nível','IES médio','Analistas completos','Parciais','Sem dados','Participação'].map(x=>h('th',{},x)))),
+      h('tbody',{},niveis.map(n=>{const g=resumo.grupos[n];return h('tr',{},
+        h('td',{},n==='N1'?'N1 (inclui N1/N2 Peticiona)':n),
+        h('td',{class:'ies '+(g.media===null?'':iesClass(g.media))},fmt(g.media,1)),
+        h('td',{},`${g.completos.length}/${g.total}`),h('td',{},g.parciais),h('td',{},g.semDados),
+        h('td',{},fmt(100/niveis.length,1)+'%'));})))),
+    h('div',{class:'note'},`IES vinculado = média dos IES dos ${niveis.length} níveis presentes nesta carteira; cada nível tem participação igual. Somente notas individuais completas são consideradas.`)));
+
+  const linhas=analistasDoLider(lider.id).map(a=>{
+    const dados=state.dados[a.id]||{};
+    const consolidado=anual?consolidarAno(dados,ano):null;
+    const valores=anual?valoresParaNotaAnual(consolidado):dados[ui.periodo];
+    const r=calcIES(valores,c,a.nivel);
+    const situacao=r.ies===null?'Sem dados':r.parcial?'Parcial':r.ies>=referencia?'Na referência':'Abaixo da referência';
+    const slaPrimeira=valores&&valores.slaPrimeira;
+    return {a,r,situacao,slaPrimeira};
+  });
+  const ordem={N1:0,N2:1,N3:2};
+  linhas.sort((x,y)=>ordem[grupoIES(x.a.nivel)]-ordem[grupoIES(y.a.nivel)]||x.a.nome.localeCompare(y.a.nome,'pt-BR'));
+  root.append(h('div',{class:'box'},
+    h('h2',{},`Analistas sob responsabilidade de ${lider.nome} — ${anual?'acumulado '+ano:periodos.find(p=>p.id===ui.periodo)?.label||ui.periodo}`),
+    h('div',{class:'tw'},h('table',{},
+      h('thead',{},h('tr',{},...['Analista','Nível','IES','Situação','Indicadores','SLA 1ª resposta N3'].map(x=>h('th',{},x)))),
+      h('tbody',{},linhas.map(x=>h('tr',{},
+        h('td',{},x.a.nome),h('td',{},x.a.nivel),
+        h('td',{class:'ies '+(!x.r.parcial?iesClass(x.r.ies):'')},fmt(x.r.ies,1)+(x.r.ies!==null&&x.r.parcial?'*':'')),
+        h('td',{class:x.situacao==='Na referência'?'ok':x.situacao==='Abaixo da referência'?'bad':'mid'},x.situacao),
+        h('td',{},`${x.r.n}/${x.r.de}`),
+        h('td',{class:isN3(x.a.nivel)?(temNumero(x.slaPrimeira)?Number(x.slaPrimeira)>=99?'ok':'bad':'mid'):''},
+          isN3(x.a.nivel)?(temNumero(x.slaPrimeira)?`${fmt(x.slaPrimeira,1)}%`:'—'):'—')))))),
+    h('div',{class:'note'},'A referência IES ≥ 78 vem do modelo anterior; não equivale a metas oficiais individuais específicas de N2/N3. *Notas parciais não entram na média. Para o N3, a meta contratual informada de primeira resposta é 99%.')));
+
+  const evolucoes=TECH_LEADERS.map(l=>({lider:l,serie:Array.from({length:12},(_,i)=>
+    resumirIESCarteira(`${ano}-${String(i+1).padStart(2,'0')}`,l.id).geral)}));
+  root.append(h('div',{class:'box'},h('h2',{},`Evolução do IES vinculado — ${ano}`),
+    h('div',{class:'canvas',style:'height:300px'},h('canvas',{id:'ch-techleaders-evo'})),
+    h('div',{class:'note'},'A linha de cada líder só aparece quando todos os níveis da respectiva carteira possuem ao menos uma nota completa. Meses com lançamentos pendentes são prévias.')));
+  chart('ch-techleaders-evo',{type:'line',data:{labels:MESES,datasets:[
+    ...evolucoes.map((e,i)=>({label:e.lider.nome,data:e.serie,borderColor:['#2D9CDB','#9B51E0'][i],backgroundColor:['#2D9CDB','#9B51E0'][i],borderWidth:e.lider.id===lider.id?3:2})),
+    {label:`Referência IES ${referencia}`,data:MESES.map(()=>referencia),borderColor:css('--bad'),borderDash:[5,5],pointRadius:0}
+  ].map(x=>({...x,spanGaps:false,tension:.2}))},
+  options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}},plugins:{legend:{display:true}}}});
 }
 
 function renderTime(){
@@ -452,6 +652,7 @@ function renderTime(){
   root.append(h('div',{class:'bar'},
     select('f-per','Período',periodos.map(p=>({v:p.id,t:p.label})),ui.periodo,v=>{ui.periodo=v;ui.ano=Number(v.slice(0,4));render();}),
     select('f-niv','Nível',[{v:'',t:'Todos'},...niveis.map(n=>({v:n,t:n}))],ui.nivel,v=>{ui.nivel=v;render();})));
+  renderConsolidadoGeral(root); // independente do filtro de nível: N1 + N2 + N3
   const anual=ui.periodo.endsWith('-ANO');
   const rows=state.analistas.filter(a=>!ui.nivel||a.nivel===ui.nivel).map(a=>{
     const dadosAnalista=state.dados[a.id]||{};
@@ -656,7 +857,7 @@ function renderLancar(){
     return tr;
   }));
   const msg=h('div',{id:'l-msg'});
-  const ta=h('textarea',{placeholder:'N1: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog\nN2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets\nN3: Analista; SLA 1ª Resposta; SLA Solução; FLR; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85\nSepare por TAB ou ponto e vírgula.'});
+  const ta=h('textarea',{placeholder:'N1: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog\nN2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets; Tempo Resolução P85\nN3: Analista; SLA 1ª Resposta; SLA Solução; FLR; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85\nSepare por TAB ou ponto e vírgula.'});
   const aplicar=()=>{
     const porNome=Object.fromEntries(state.analistas.map(a=>[norm(a.nome),a]));
     let ok=0; const sem=[];
@@ -676,7 +877,7 @@ function renderLancar(){
   };
   root.append(h('div',{class:'box'},h('h2',{},'Lançamento mensal — N1, N2 e N3'),
     h('div',{class:'bar'},select('l-pe','Período',periodosLancamento.map(p=>({v:p.id,t:p.label})),ui.lPeriodo,v=>{ui.lPeriodo=v;render();})),
-    h('div',{class:'note',style:'margin:0 0 8px'},'N2: Tickets Fechados, CSAT, Reabertos e Backlog de Tickets pontuam; SLA Solução, SLA Backlog e P85 ficam como contexto. N3: nove indicadores pontuam, incluindo FLR e SLA 1ª Resposta (meta contratual 99%). Use o FLR apenas para chamados que entram diretamente no N3, se disponíveis nesse recorte. Valores em % sem símbolo; contagens inteiras. Célula vazia = nota parcial, não zero.'),
+    h('div',{class:'note',style:'margin:0 0 8px'},'N2: Tickets Fechados, CSAT, Reabertos, Backlog bruto e Tempo de Resolução P85 pontuam. SLA Solução e SLA Backlog ficam como contexto, por poderem chegar vencidos ao N2. N3: nove indicadores pontuam, incluindo FLR e SLA 1ª Resposta (meta contratual 99%). Use o FLR apenas para chamados que entram diretamente no N3, se disponíveis nesse recorte. Valores em % sem símbolo; contagens inteiras. Célula vazia = nota parcial, não zero.'),
     h('div',{class:'tw'},h('table',{class:'lote'},h('thead',{},h('tr',{},h('th',{},'Analista'),...ALL_KEYS.map(k=>h('th',{},LABEL[k])))),tbody)),
     msg,
     h('div',{style:'margin-top:10px;display:flex;gap:8px'},h('button',{class:'btn',onclick:async e=>{
@@ -702,7 +903,7 @@ function renderLancar(){
       catch(err){msg.replaceChildren(h('div',{class:'msg bad'},'Não foi possível salvar: '+(err.message||err)));e.target.disabled=false;}
     }},'Salvar período'))),
     h('div',{class:'box'},h('h2',{},'Colar do Excel'),
-      h('div',{class:'note'},'Ordem N1/N1-N2 Peticiona: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog. Ordem N2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets. Ordem N3: Analista; SLA 1ª Resposta; SLA Solução; FLR; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85. Valores de contexto podem ser preenchidos diretamente na tabela.'),
+      h('div',{class:'note'},'Ordem N1/N1-N2 Peticiona: Analista; FLR; CSAT; Reabertos; TME P85; SLA Solução; SLA Backlog. Ordem N2: Analista; Tickets Fechados; CSAT; Reabertos; Backlog de Tickets; Tempo Resolução P85. Ordem N3: Analista; SLA 1ª Resposta; SLA Solução; FLR; SLA Backlog; CSAT; Reabertos; Tickets Fechados; Backlog de Tickets; TME P85. Valores de contexto podem ser preenchidos diretamente na tabela.'),
       ta,h('div',{style:'margin-top:8px'},h('button',{class:'btn ghost',onclick:aplicar},'Preencher a tabela com o que colei'))));
 }
 
@@ -733,16 +934,16 @@ function renderRegras(){
     h('p',{},'Todos os indicadores estão no Painel de Suporte — V1 do Projuris. Os pesos N2/N3, os limites para quantidades e as faixas complementares são PROPOSTAS DE GESTÃO: não constam como metas oficiais do painel.'),
     h('p',{},`Cada indicador recebe nota de 0 a 100. IES = soma (nota × peso), em escala de 0 a 100. Referência anterior do modelo: IES ≥ ${c.metaIES}; não é uma meta oficial específica para N2/N3.`),
     h('p',{},'Se faltar um indicador obrigatório, aparece IES PARCIAL, com os pesos presentes redistribuídos proporcionalmente apenas para referência. N3: FLR e SLA de 1ª Resposta são pontuáveis; preencha ambos para nota completa. IES parcial não entra na média nem no ranking completo.'),
-    h('p',{},'N2 não pontua por FLR, FCR ou SLA de primeira resposta. No N3, a meta contratual de SLA de primeira resposta é 99% (informada pela gestora). FLR N3 somente quando o BI puder filtrar os chamados recebidos diretamente pelo terceiro nível e concluídos sem escalonamento; não confundir com o apoio prestado ao N2.')));
+    h('p',{},'N2 não pontua por FLR, FCR, SLA de primeira resposta nem SLA de solução por backlog. O Tempo de Resolução P85 pontua 15% no N1, N2 e N3, respeitando os mesmos limites de nota já existentes (≤8 dias = 100 pontos; ≥18 dias = 0). No N3, a meta contratual de SLA de primeira resposta é 99% (informada pela gestora). FLR N3 somente quando o BI puder filtrar os chamados recebidos diretamente pelo terceiro nível e concluídos sem escalonamento; não confundir com o apoio prestado ao N2.')));
   root.append(h('div',{class:'box'},h('h2',{},'N1 e N1/N2 Peticiona — regras anteriores (mantidas)'),
     tabela(KEYS.map(k=>linha(k,c.pesos[k],'N1'))),
     h('div',{class:'note'},`Total: ${Math.round(soma(c.pesos)*100)}%. Benchmarks e a regra de pontuação são do modelo IES anterior.`)));
   root.append(h('div',{class:'box'},h('h2',{},'N2 — indicadores oficiais, com pesos e nota'),
-    h('p',{},'A avaliação do N2 valoriza qualidade e produção. SLA de solução, SLA de backlog e P85 continuam visíveis como contexto, sem pontuar, porque os chamados podem chegar já vencidos ou depender do desenvolvimento.'),
+    h('p',{},'A avaliação do N2 valoriza qualidade, produção e Tempo de Resolução P85 (15%), que é uma meta de bônus acompanhada pela gestão. SLA de solução e SLA de backlog permanecem como contexto, sem pontuar, pois os chamados podem chegar já vencidos ou depender do desenvolvimento. ATENÇÃO: o P85 oficial considera o tempo total desde a abertura, inclusive a etapa anterior ao N2; sua nota deve ser interpretada com essa ressalva.'),
     tabela([...N2_KEYS.map(k=>linha(k,c.n2Pesos[k],'N2')),...N2_CTX.map(k=>linha(k,0,'N2'))]),
     h('div',{class:'note'},`Total de pesos N2: ${Math.round(soma(c.n2Pesos)*100)}%. Metas de tickets fechados e backlog bruto são referências provisórias que devem ser calibradas com o histórico.`)));
   root.append(h('div',{class:'box'},h('h2',{},'N3 — indicadores oficiais, com pesos e nota'),
-    h('p',{},'O N3 atende clientes prioritários com SLA de primeira resposta contratado de 99%; este indicador possui maior peso e pontuação gerencial mais exigente. FLR também pontua quando o BI mede os chamados recebidos diretamente pelo N3 e solucionados sem escalonamento. Pesos e nota escalonada são propostas de gestão; a meta de 99% é o contrato informado pela gestora.'),
+    h('p',{},'O N3 atende clientes prioritários com SLA de primeira resposta contratado de 99%; este indicador mantém o maior peso (25%). O Tempo de Resolução P85 volta a ter 15% por integrar a meta de bônus. O SLA de Solução por Backlog permanece pontuando com 10%. FLR também pontua quando o BI mede os chamados recebidos diretamente pelo N3 e solucionados sem escalonamento. Pesos e nota escalonada são propostas de gestão; a meta de 99% é o contrato informado pela gestora.'),
     tabela(N3_KEYS.map(k=>linha(k,c.n3Pesos[k],'N3'))),
     h('div',{class:'note'},`Total de pesos N3: ${Math.round(soma(c.n3Pesos)*100)}%. Para IES completo, preencha os nove indicadores; se faltar FLR ou SLA 1ª resposta, a nota será PARCIAL. Meta contratual SLA de 1ª resposta: 99%.`))); 
   function exemplo(nivel,dados){
@@ -756,18 +957,34 @@ function renderRegras(){
         h('td',{},`${fmt(nota(k,dados[k],c),1)} pts × ${Math.round(pesos[k]*100)}% = ${fmt(nota(k,dados[k],c)*pesos[k],2)} pontos`)))),
       h('p',{},`IES ${nivel} do exemplo = ${fmt(resultado.ies,2)} pontos (100% dos indicadores preenchidos).`));
   }
-  root.append(exemplo('N2',{ticketsFechados:18,csat:94,reab:4,backlogTickets:8}));
+  root.append(exemplo('N2',{ticketsFechados:18,csat:94,reab:4,backlogTickets:8,tme:9}));
   root.append(exemplo('N3',{slaPrimeira:98,sla:96,flr:96,back:80,csat:95,reab:3,ticketsFechados:18,backlogTickets:8,tme:9}));
+  root.append(h('div',{class:'box'},h('h2',{},'IES geral UNLT — N1 + N2 + N3'),
+    h('p',{},'IES geral = (IES médio completo N1 + IES médio completo N2 + IES médio completo N3) ÷ 3. Cada nível tem exatamente um terço do peso no resultado geral, mesmo que possua mais analistas.'),
+    h('div',{class:'tw'},h('table',{},h('thead',{},h('tr',{},h('th',{},'Nível'),h('th',{},'Participação no IES geral'),h('th',{},'Regra individual'))),
+      h('tbody',{},h('tr',{},h('td',{},'N1 (inclui N1/N2 Peticiona)'),h('td',{},'33,33%'),h('td',{},'Modelo e pesos N1')),
+        h('tr',{},h('td',{},'N2'),h('td',{},'33,33%'),h('td',{},'Modelo e pesos N2')),
+        h('tr',{},h('td',{},'N3'),h('td',{},'33,33%'),h('td',{},'Modelo e pesos N3'))))),
+    h('p',{},'IES médio de cada nível = soma dos IES individuais completos do nível ÷ quantidade de analistas com nota completa. N1/N2 Peticiona faz parte do grupo N1. Cada analista mantém as regras e os pesos correspondentes ao seu nível.'),
+    h('p',{},'O resultado geral só é divulgado quando há pelo menos um analista com todos os campos pontuáveis preenchidos em cada um dos três níveis. Notas parciais e ausentes são identificadas, mas não entram no consolidado. A média é gerencial, não um indicador definido no Painel Oficial de Suporte.'),
+    h('p',{},'Os filtros de período controlam o consolidado. O filtro de nível altera apenas os detalhes por grupo, não o IES geral apresentado no topo da Visão do time.')));
+  root.append(h('div',{class:'box'},h('h2',{},'Tech Leaders — meta atrelada aos analistas'),
+    h('p',{},'Alessandro acompanha os seis N1, Jussara Wiemes (N2), Felipe da Silva Luz e Max Filipe Macedo Braga (N1/N2 Peticiona). Douglas Cubas acompanha os mesmos seis N1 e todos os demais N2 e N3: Julia Stein, Patrícia Ledoux, Luiz Mário Fontes, Cristian Andrade, Cristian Dias e Rafael de Sousa Tavares.'),
+    h('p',{},'O IES vinculado de cada Tech Leader é calculado com os analistas da sua própria carteira. Primeiro, calcula-se o IES individual com os pesos do nível; depois, a média dos IES completos de cada nível presente; por último, a média simples desses níveis. Alessandro: N1 e N2, 50% cada. Douglas: N1, N2 e N3, 33,33% cada.'),
+    h('p',{},'Os N1 fazem parte das duas carteiras, mas entram apenas uma vez no IES geral UNLT, que continua calculado independentemente com todos os analistas. Os Tech Leaders não têm indicadores lançados em nome próprio.'),
+    h('p',{},'Se qualquer nível existente na carteira não tiver nota completa, o IES vinculado não será exibido. Com analistas pendentes, o resultado é uma prévia. A referência IES ≥ 78 é do modelo anterior; não foi cadastrada uma nova meta contratual para os líderes.'),
+    h('p',{},'Na aba Tech Leaders, selecione Alessandro ou Douglas Cubas para ver exclusivamente a carteira escolhida, os lançamentos faltantes, as médias por nível e a evolução dos dois líderes.')));
   root.append(h('div',{class:'box'},h('h2',{},'Acumulado anual — todos os níveis'),
     h('p',{},'Os dados mensais são consolidados no navegador. Tickets fechados são mostrados como soma anual, mas sua nota considera a média mensal nos meses em que o indicador foi lançado. Backlog bruto corresponde ao último valor mensal informado.'),
-    h('p',{},'Percentuais, SLA e P85: médias simples dos meses com valor. Uma média de percentuais não corresponde à taxa oficial consolidada por ticket.')));
+    h('p',{},'Percentuais, SLA e Tempo de Resolução P85: médias simples dos meses com valor. O P85 anual correto exigiria calcular novamente o percentil sobre todos os tickets do ano; a média dos P85 mensais é apenas uma aproximação gerencial. Uma média de percentuais também não corresponde à taxa oficial consolidada por ticket.')));
 }
 
 function render(){
   $('#tab-time').hidden = ui.tab!=='time'; $('#tab-analista').hidden = ui.tab!=='analista';
+  $('#tab-techleaders').hidden = ui.tab!=='techleaders';
   $('#tab-lancar').hidden = ui.tab!=='lancar'; $('#tab-regras').hidden = ui.tab!=='regras';
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===ui.tab));
-  if(ui.tab==='time') renderTime(); else if(ui.tab==='analista') renderAnalista(); else if(ui.tab==='lancar') renderLancar(); else renderRegras();
+  if(ui.tab==='time') renderTime(); else if(ui.tab==='analista') renderAnalista(); else if(ui.tab==='techleaders') renderTechLeaders(); else if(ui.tab==='lancar') renderLancar(); else renderRegras();
 }
 function afterAuth(){
   const who=$('#who'), li=$('#loginBtn'), lo=$('#logoutBtn');
