@@ -46,6 +46,7 @@ nav{display:flex;gap:4px;padding:12px 24px 0;flex-wrap:wrap;border-bottom:1px so
 nav button{border:0;background:transparent;padding:10px 16px;color:var(--muted);font:600 14px var(--font-sans);cursor:pointer;border-bottom:2px solid transparent;transition:color 220ms var(--ease)}
 nav button:hover{color:var(--link-hover)}
 nav button.on{color:var(--fg);border-bottom-color:var(--fg)}
+nav button[hidden]{display:none}
 main{padding:24px 24px 48px;max-width:1280px;margin:0 auto}
 .bar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:16px}
 label{display:flex;flex-direction:column;gap:4px;font:400 11px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
@@ -316,6 +317,16 @@ for (const y of [OPTIONS.anoAtual, OPTIONS.anoAtual-1]){
 const DEMO = new URLSearchParams(location.search).has('demo');
 const CONFIGURED = !!B4A.appId && !B4A.appId.startsWith('COLE') && !!B4A.jsKey && !B4A.jsKey.startsWith('COLE');
 const state = {cfg:DEFAULT_CFG, analistas:[], dados:{}, objs:{}, anaObjs:{}, user:null};
+// Controle visual de acesso. SEGURANÇA: as permissões de escrita devem ser
+// efetivamente bloqueadas no Back4App (CLP de Analista e Medicao) para a role GestoresIES.
+// O atributo _User.tipoAcesso apenas adapta a interface, não concede direitos no servidor.
+const podeEditar = () => !!state.user && (DEMO || (typeof state.user.get === 'function' && state.user.get('tipoAcesso') === 'gestor'));
+function selecionarCarteiraUsuario(){
+  if(!state.user || typeof state.user.get !== 'function') return;
+  const carteira = state.user.get('carteira');
+  if(TECH_LEADERS.some(l=>l.id===carteira)) ui.techLeader=carteira;
+}
+
 
 // Consolidado anual calculado apenas no navegador a partir dos meses.
 // Contagem de tickets fechados = SOMA mensal; backlog = ÚLTIMO valor mensal lançado.
@@ -443,17 +454,23 @@ async function connect(){
   if (!CONFIGURED){ setConn('Back4App não configurado (cole o App ID e a JS Key no arquivo)','warn'); afterAuth(); return; }
   Parse.initialize(B4A.appId, B4A.jsKey); Parse.serverURL = B4A.serverURL;
   state.user = Parse.User.current();
-  if (state.user){ await recarregar(); } else setConn('Faça login para ver e lançar os dados','warn');
+  if (state.user){
+    // Atualiza o perfil mesmo quando a sessão ficou salva em outra visita.
+    try { state.user=await state.user.fetch(); } catch(e) { /* sessão já contém usuário; recarregar acusa erros de leitura */ }
+    selecionarCarteiraUsuario();
+    await recarregar();
+  } else setConn('Faça login para consultar os indicadores','warn');
   afterAuth();
 }
 async function recarregar(){
   try{ await carregar(); escolherPeriodoPadrao(); setConn('Conectado ao Back4App','ok'); }
   catch(e){ setConn('Erro ao ler o Back4App: '+(e.message||e),'bad'); }
 }
-async function login(user,pass){ state.user = await Parse.User.logIn(user,pass); await recarregar(); afterAuth(); }
-async function logout(){ await Parse.User.logOut(); state.user=null; state.analistas=TEAM.map(([nome,nivel])=>({id:slug(nome),nome,nivel})); state.dados={}; setConn('Faça login para ver e lançar os dados','warn'); afterAuth(); }
+async function login(user,pass){ state.user = await Parse.User.logIn(user,pass); selecionarCarteiraUsuario(); await recarregar(); afterAuth(); }
+async function logout(){ await Parse.User.logOut(); state.user=null; state.analistas=TEAM.map(([nome,nivel])=>({id:slug(nome),nome,nivel})); state.dados={}; setConn('Faça login para consultar os indicadores','warn'); afterAuth(); }
 
 async function salvarLote(periodo, linhas){
+  if(!podeEditar()) throw new Error('Acesso somente leitura. Solicite permissão de gestor para salvar dados.');
   if (periodo.endsWith('-ANO')) throw new Error('O acumulado anual é automático: lance apenas os meses.');
   if(DEMO){
     for(const l of linhas){
@@ -479,6 +496,7 @@ async function salvarLote(periodo, linhas){
   await recarregar(); render(); return objs.length;
 }
 async function cadastrarEquipe(){
+  if(!podeEditar()) throw new Error('Acesso somente leitura.');
   if (DEMO||!CONFIGURED) return;
   const existentes = new Set((await fetchAll('Analista')).map(o=>o.get('slug')||slug(o.get('nome'))));
   const novos = TEAM.filter(([n])=>!existentes.has(slug(n))).map(([nome,nivel])=>{ const o=new Parse.Object('Analista'); o.set('nome',nome); o.set('nivel',nivel); o.set('slug',slug(nome)); o.set('ativo',true); return o; });
@@ -826,7 +844,7 @@ function renderAnalistaNivel(root,a,d,nivel){
 
 function renderLancar(){
   const root=$('#tab-lancar'); root.replaceChildren();
-  if(!state.user){root.append(h('div',{class:'box empty'},'Faça login para lançar dados.'));return;}
+  if(!podeEditar()){root.append(h('div',{class:'box empty'},'Acesso somente leitura. Esta aba é exclusiva de usuários com perfil gestor e permissão de gravação no Back4App.'));return;}
   if(!state.analistas.length||(!DEMO&&!Object.keys(state.anaObjs).length)){
     root.append(h('div',{class:'box'},h('h2',{},'Nenhum analista cadastrado no Back4App'),
       h('p',{},`Cadastre a equipe UNLT (${TEAM.length} pessoas) com um clique.`),
@@ -909,6 +927,9 @@ function renderLancar(){
 
 function renderRegras(){
   const root=$('#tab-regras');root.replaceChildren();
+  root.append(h('div',{class:'box'},h('h2',{},'Acesso à consulta e lançamentos'),
+    h('p',{},'Tech Leaders: acesso de consulta, sem lançamentos. Gestores: podem lançar dados quando autorizados no Back4App. A permissão real de gravação depende das configurações de segurança (CLP e ACL) no Back4App, não do botão oculto na tela.'),
+    h('p',{},'Ao entrar, a aba Tech Leaders seleciona a carteira definida no perfil do usuário. A visualização de outras carteiras permanece disponível.')));
   const c=state.cfg;
   const soma=obj=>Object.values(obj).reduce((a,b)=>a+b,0);
   const formula={
@@ -980,6 +1001,10 @@ function renderRegras(){
 }
 
 function render(){
+  // Tech Leaders podem consultar todas as visões; a aba de edição só aparece para gestores.
+  const tabLancamento=document.querySelector('#tabs button[data-tab="lancar"]');
+  if(tabLancamento) tabLancamento.hidden=!podeEditar();
+  if(ui.tab==='lancar'&&!podeEditar()) ui.tab='techleaders';
   $('#tab-time').hidden = ui.tab!=='time'; $('#tab-analista').hidden = ui.tab!=='analista';
   $('#tab-techleaders').hidden = ui.tab!=='techleaders';
   $('#tab-lancar').hidden = ui.tab!=='lancar'; $('#tab-regras').hidden = ui.tab!=='regras';
@@ -988,7 +1013,8 @@ function render(){
 }
 function afterAuth(){
   const who=$('#who'), li=$('#loginBtn'), lo=$('#logoutBtn');
-  who.hidden=!state.user; who.textContent=state.user?(state.user.get?state.user.get('username'):state.user.username):'';
+  who.hidden=!state.user;
+  who.textContent=state.user?((state.user.get?state.user.get('username'):state.user.username)+(podeEditar()?' · Gestão':' · Somente leitura')):'';
   li.hidden = DEMO || !CONFIGURED || !!state.user; lo.hidden = DEMO || !CONFIGURED || !state.user;
   render();
 }
