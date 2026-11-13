@@ -55,6 +55,11 @@ select:focus,input:focus,textarea:focus{outline:2px solid #2F80ED;outline-offset
 button.btn{cursor:pointer;background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600;transition:background 220ms var(--ease),transform 100ms var(--ease)}
 button.btn:hover{background:var(--accent-hover)}button.btn:active{transform:scale(.95)}
 button.btn.ghost{background:transparent;color:var(--fg);border-color:var(--fg)}
+/* Botões Entrar/Sair: contraste permanente no cabeçalho escuro.
+   Regra após button.btn.ghost para evitar que a cor global torne o texto invisível. */
+header button.btn.ghost{background:#FFFFFF;color:#002232;border:1px solid #FFFFFF;font-weight:700;min-width:74px;box-shadow:0 1px 4px rgba(0,0,0,.16)}
+header button.btn.ghost:hover{background:#EAF2F5;color:#002232;border-color:#EAF2F5}
+header button.btn.ghost:focus-visible{outline:3px solid #F2C94C;outline-offset:3px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin-bottom:16px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:28px 0 28px 0;padding:18px 20px;box-shadow:var(--shadow-sm);transition:transform 220ms var(--ease),box-shadow 220ms var(--ease)}
 .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
