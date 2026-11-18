@@ -88,6 +88,50 @@ dialog form{display:flex;flex-direction:column;gap:12px}
 .lote td:first-child{min-width:190px}
 .lote tr.chg td{background:var(--warnbg)}
 textarea{width:100%;min-height:90px;font:12px/1.4 var(--font-mono);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)}
+
+/* Lista de relatórios: mesmo design do dashboard e ações visíveis. */
+.relatorios-tabela{min-width:720px}
+.relatorios-tabela td:last-child,.relatorios-tabela th:last-child{text-align:right}
+.relatorios-tabela td{vertical-align:middle}
+.relatorios-tabela button.btn{min-width:108px}
+.relatorios-tabela button.btn:disabled{opacity:.45;cursor:not-allowed}
+#rel-busca{min-width:210px;max-width:320px}
+/* Relatório individual: fica invisível na navegação normal; somente PDF/impressão. */
+#ies-print-report{display:none}
+@page{size:A4 landscape;margin:10mm}
+@media print{
+  html,body{margin:0!important;padding:0!important;background:#fff!important;color:#002232!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body>*:not(#ies-print-report){display:none!important}
+  #ies-print-report{display:block!important;font-family:"Aptos","Segoe UI",sans-serif!important;font-size:10px!important;line-height:1.3!important;color:#002232!important}
+  .rp-page{break-after:page;page-break-after:always;overflow:visible}
+  .rp-page:last-child{break-after:auto;page-break-after:auto}
+  .rp-head{border-bottom:3px solid #002232;padding:0 0 10px;margin-bottom:12px;display:flex;align-items:flex-end;justify-content:space-between}
+  .rp-brand{font:700 11px "Aptos",sans-serif;letter-spacing:1.5px;color:#002232}
+  .rp-head h1{font-size:19px!important;line-height:1.1;color:#002232!important;margin:5px 0 0}
+  .rp-head p{margin:2px 0;color:#62696D;font-size:10px}
+  .rp-ident{display:grid;grid-template-columns:2fr 0.7fr 0.7fr 1fr;gap:8px;margin:0 0 12px}
+  .rp-id-item{background:#f2f5f6;border:1px solid #e0e7e9;border-radius:5px;padding:7px 9px;min-height:39px}
+  .rp-id-item small{display:block;color:#62696D;font-size:8px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}
+  .rp-id-item strong{font-size:12px;display:block;line-height:1.2}
+  .rp-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 10px}
+  .rp-card{border:1px solid #dce5e8;border-radius:7px;padding:9px 10px;min-height:54px}
+  .rp-card .rp-k{display:block;font-size:9px;color:#62696D}
+  .rp-card .rp-v{display:block;font-size:20px;font-weight:700;line-height:1.2;margin-top:2px}
+  .rp-card .rp-detail{display:block;font-size:8.5px;color:#62696D;margin-top:2px}
+  .rp-good{color:#136a3e!important}.rp-bad{color:#af2935!important}.rp-muted{color:#62696D!important}
+  .rp-section-title{font-size:11px;font-weight:700;margin:10px 0 5px;letter-spacing:.2px;color:#002232}
+  #ies-print-report table{border-collapse:collapse;width:100%!important;min-width:0!important;table-layout:fixed;margin:0}
+  #ies-print-report th{font:700 8.6px "Aptos",sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left;color:#002232;background:#edf1f3;border-bottom:1px solid #ccd9de;padding:5px 5px}
+  #ies-print-report td{font-size:9px;padding:5px 5px;border-bottom:1px solid #e2e7e9;white-space:normal;text-align:left;vertical-align:top;word-wrap:break-word}
+  #ies-print-report .rp-num{text-align:right!important;font-variant-numeric:tabular-nums}
+  #ies-print-report tr{break-inside:avoid;page-break-inside:avoid}
+  #ies-print-report .rp-total td{font-weight:700;background:#edf1f3;border-top:2px solid #ccd9de}
+  .rp-foot{border-top:1px solid #dbe3e6;margin-top:9px;padding-top:6px;color:#56636a;font-size:8.7px;line-height:1.35}
+  .rp-foot p{margin:0 0 3px}
+  .rp-table-matrix th,.rp-table-matrix td{font-size:8.1px!important;text-align:center!important;padding:6px 3px!important;white-space:nowrap!important}
+  .rp-table-matrix th:first-child,.rp-table-matrix td:first-child{text-align:left!important;white-space:normal!important}
+  .rp-note-box{margin-top:10px;background:#edf1f3;border-left:3px solid #002232;padding:8px 10px;font-size:9.2px}
+}
 </style>
 </head>
 <body>
@@ -103,6 +147,7 @@ textarea{width:100%;min-height:90px;font:12px/1.4 var(--font-mono);padding:10px;
 <nav id="tabs">
   <button data-tab="time" class="on">Visão do time</button>
   <button data-tab="analista">Analista</button>
+  <button data-tab="relatorios">Relatórios PDF</button>
   <button data-tab="techleaders">Tech Leaders</button>
   <button data-tab="lancar">Lançar dados</button>
   <button data-tab="regras">Regras do IES</button>
@@ -110,10 +155,13 @@ textarea{width:100%;min-height:90px;font:12px/1.4 var(--font-mono);padding:10px;
 <main>
   <section id="tab-time"></section>
   <section id="tab-analista" hidden></section>
+  <section id="tab-relatorios" hidden></section>
   <section id="tab-techleaders" hidden></section>
   <section id="tab-lancar" hidden></section>
   <section id="tab-regras" hidden></section>
 </main>
+<!-- Área exclusiva para impressão/PDF: não é exibida na interface normal -->
+<section id="ies-print-report" aria-hidden="true"></section>
 
 <dialog id="dlg">
   <form method="dialog" id="loginForm">
@@ -529,6 +577,7 @@ const iesClass = v => v===null||v===undefined?'':v>=state.cfg.metaIES?'ok':'bad'
 function metaClass(k,v,nivel){ const f=faixa(k,v,state.cfg,nivel); return f==='topo'?'ok':f==='saudavel'?'mid':f==='abaixo'?'bad':''; }
 const tip = (k,v,nivel)=>faixaNome(k,v,state.cfg,nivel);
 
+const relatorioUI = {ano:OPTIONS.anoAtual,nivel:"",busca:""};
 const ui = {tab:'time', periodo:`${OPTIONS.anoAtual}-ANO`, nivel:'', analista:'', ano:OPTIONS.anoAtual, lAnalista:'', lPeriodo:'', techLeader:'alessandro'};
 
 function select(id,label,opts,val,onchange){
@@ -782,7 +831,8 @@ function renderAnalista(){
   const a=state.analistas.find(x=>x.id===ui.analista); const d=state.dados[a.id]||{};
   root.append(h('div',{class:'bar'},
     select('a-sel','Analista',state.analistas.map(x=>({v:x.id,t:`${x.nome} (${x.nivel||'—'})`})),ui.analista,v=>{ui.analista=v;render();}),
-    select('a-ano','Ano',[OPTIONS.anoAtual,OPTIONS.anoAtual-1].map(y=>({v:String(y),t:String(y)})),String(ui.ano),v=>{ui.ano=+v;render();})));
+    select('a-ano','Ano',[OPTIONS.anoAtual,OPTIONS.anoAtual-1].map(y=>({v:String(y),t:String(y)})),String(ui.ano),v=>{ui.ano=+v;render();}),
+    h('button',{type:'button',class:'btn',id:'btn-exportar-pdf',title:'Gera um relatório somente deste analista. Na impressão, escolha Salvar como PDF.',onclick:()=>exportarRelatorioAnalistaPDF(a,ui.ano)},'Exportar PDF deste analista')));
   if(isN2(a.nivel)){ renderAnalistaN2(root,a,d); return; }
   if(isN3(a.nivel)){ renderAnalistaN3(root,a,d); return; }
   const ms = Array.from({length:12},(_,i)=>`${ui.ano}-${String(i+1).padStart(2,'0')}`);
@@ -845,6 +895,180 @@ function renderAnalistaNivel(root,a,d,nivel){
     {label:`IES ${nivel} (inclui notas parciais)`,data:notas.map(x=>x.ies),borderColor:css('--brand'),backgroundColor:css('--brand'),spanGaps:true,tension:.25},
     {label:`Referência ${c.metaIES}`,data:MESES.map(()=>c.metaIES),borderColor:css('--bad'),borderDash:[6,4],pointRadius:0}]},
     options:{maintainAspectRatio:false,scales:{y:{min:0,max:100}}}});
+}
+
+
+/* =====================================================================
+   5) RELATÓRIO INDIVIDUAL PARA PDF
+   Imprime somente o analista selecionado. Utiliza a opção nativa
+   "Salvar como PDF" do navegador; sem envio de dados a terceiros.
+   Fórmulas e dados vêm das funções originais (não há novo cálculo de IES).
+   ===================================================================== */
+function indicadorPDF(k,v,unidade=true){
+  if(!temNumero(v)) return '—';
+  const n=fmtCampo(k,v);
+  if(!unidade) return n;
+  if(k==='ticketsFechados'||k==='backlogTickets') return n+' tickets';
+  return k==='tme'?n+' dias':n+'%';
+}
+function cabecalhoRelatorioPDF(titulo,subtitulo){
+  return h('div',{class:'rp-head'},
+    h('div',{},h('div',{class:'rp-brand'},'STARIAN  /  SUPORTE UNLT'),h('h1',{},titulo)),
+    h('div',{style:'text-align:right'},h('p',{},subtitulo),h('p',{},'Documento individual · uso interno')));
+}
+function relatorioCardPDF(rotulo,valor,detalhe,classe=''){
+  return h('div',{class:'rp-card'},h('span',{class:'rp-k'},rotulo),h('span',{class:'rp-v '+classe},valor),h('span',{class:'rp-detail'},detalhe));
+}
+/* ============================================================
+   CENTRAL DE RELATÓRIOS PDF — um botão por analista.
+   Usa o MESMO gerador de PDF da aba Analista; não altera o IES.
+   ============================================================ */
+function renderRelatoriosPDF(){
+  const root=$('#tab-relatorios'); root.replaceChildren();
+  root.append(h('div',{class:'box'},
+    h('h2',{},'Relatórios individuais em PDF'),
+    h('p',{},'Selecione o ano e clique em Gerar PDF ao lado do analista. O documento contém somente os indicadores, pesos, referências e histórico mensal daquela pessoa.'),
+    h('div',{class:'note'},'Na janela do navegador, selecione “Salvar como PDF” como destino. Os relatórios são gerados localmente com os dados já carregados no dashboard; nenhum arquivo é enviado para outro serviço.')));
+  if(!state.user){
+    root.append(h('div',{class:'box empty'},'Entre com seu usuário para gerar os relatórios individuais.'));
+    return;
+  }
+  const niveis=[...new Set(state.analistas.map(a=>a.nivel).filter(Boolean))].sort();
+  let tbody,contador;
+  const busca=h('input',{
+    id:'rel-busca',type:'search',value:relatorioUI.busca,
+    placeholder:'Digite o nome do analista',
+    oninput:e=>{relatorioUI.busca=e.target.value;preencherLista();}
+  });
+  root.append(h('div',{class:'box'},
+    h('div',{class:'bar'},
+      select('rel-ano','Ano',[OPTIONS.anoAtual,OPTIONS.anoAtual-1].map(y=>({v:String(y),t:String(y)})),String(relatorioUI.ano),v=>{relatorioUI.ano=Number(v);renderRelatoriosPDF();}),
+      select('rel-nivel','Nível',[{v:'',t:'Todos os níveis'},...niveis.map(n=>({v:n,t:n}))],relatorioUI.nivel,v=>{relatorioUI.nivel=v;renderRelatoriosPDF();}),
+      h('label',{},'Buscar analista',busca)),
+    contador=h('div',{class:'note',id:'rel-total'}),
+    h('div',{class:'tw'},
+      h('table',{class:'relatorios-tabela'},
+        h('thead',{},h('tr',{},...['Analista','Nível','IES acumulado','Situação dos dados','Relatório individual'].map(t=>h('th',{},t)))),
+        tbody=h('tbody',{id:'relatorio-linhas'})))));
+
+  function preencherLista(){
+    const arr=state.analistas.filter(a=>(!relatorioUI.nivel||a.nivel===relatorioUI.nivel)&&norm(a.nome).includes(norm(relatorioUI.busca))).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+    contador.textContent=`${arr.length} analista(s) encontrado(s) · referência ${relatorioUI.ano}`;
+    if(!arr.length){tbody.replaceChildren(h('tr',{},h('td',{colspan:5,class:'empty'},'Nenhum analista corresponde aos filtros.')));return;}
+    tbody.replaceChildren(...arr.map(a=>{
+      const agregado=consolidarAno(state.dados[a.id]||{},relatorioUI.ano);
+      const valores=(isN2(a.nivel)||isN3(a.nivel))?valoresParaNotaAnual(agregado):agregado.valores;
+      const resultado=calcIES(valores,state.cfg,a.nivel);
+      const temDados=resultado.ies!==null;
+      const parcial=temDados&&resultado.parcial;
+      const situacao=!temDados?'Sem lançamentos':parcial?`Parcial · ${resultado.n}/${resultado.de}`:`Completo · ${resultado.n}/${resultado.de}`;
+      return h('tr',{},
+        h('td',{},h('strong',{},a.nome)),
+        h('td',{},a.nivel||'—'),
+        h('td',{class:'ies '+(temDados&&!parcial?iesClass(resultado.ies):'')},temDados?fmt(resultado.ies,1):'—'),
+        h('td',{},h('span',{class:'chip '+(!temDados?'':parcial?'warn':'ok')},situacao)),
+        h('td',{},h('button',{
+          type:'button',class:'btn',disabled:!temDados,
+          title:temDados?'Gerar o relatório individual e salvar como PDF':'Este analista ainda não tem indicadores no ano selecionado',
+          onclick:()=>exportarRelatorioAnalistaPDF(a,relatorioUI.ano)
+        },'Gerar PDF')));
+    }));
+  }
+  preencherLista();
+}
+
+function exportarRelatorioAnalistaPDF(analista,ano){
+  if(!analista||!state.user){alert('Faça login para exportar os indicadores.');return;}
+  const raiz=document.querySelector('#ies-print-report');
+  const c=state.cfg,nivel=analista.nivel;
+  const dados=state.dados[analista.id]||{};
+  const acumulado=consolidarAno(dados,ano);
+  const valoresExibidos=acumulado.valores||{};
+  const valoresNota=(isN2(nivel)||isN3(nivel))?valoresParaNotaAnual(acumulado):valoresExibidos;
+  const resultado=calcIES(valoresNota,c,nivel);
+  const chaves=isN2(nivel)?N2_KEYS:isN3(nivel)?N3_KEYS:KEYS;
+  const contexto=isN2(nivel)?N2_CTX:[];
+  const pesos=isN2(nivel)?c.n2Pesos:isN3(nivel)?c.n3Pesos:c.pesos;
+  const dataEmissao=new Intl.DateTimeFormat('pt-BR',{dateStyle:'short'}).format(new Date());
+  const meses=Array.from({length:12},(_,i)=>{
+    const periodo=`${ano}-${String(i+1).padStart(2,'0')}`;
+    return {nome:MESES[i],periodo,linha:dados[periodo]||{},calc:calcIES(dados[periodo],c,nivel)};
+  });
+  const completos=meses.filter(m=>m.calc.ies!==null&&!m.calc.parcial).length;
+  const status=resultado.ies===null?'Sem dados':resultado.parcial?'IES parcial':resultado.ies>=c.metaIES?'Dentro da referência':'Abaixo da referência';
+  const cor=resultado.ies===null||resultado.parcial?'rp-muted':resultado.ies>=c.metaIES?'rp-good':'rp-bad';
+  const formatoNota=v=>v===null||v===undefined?'—':fmt(v,1);
+
+  // Página 1: resumo, pesos, benchmarks e notas, sem expor outros analistas.
+  const p1=h('section',{class:'rp-page'},
+    cabecalhoRelatorioPDF('Relatório individual do IES',`Ano de referência: ${ano} · Emitido em ${dataEmissao}`),
+    h('div',{class:'rp-ident'},
+      ...[['Analista',analista.nome],['Nível',nivel],['Período',`Jan–Dez/${ano}`],['Situação',status]].map(([k,v])=>
+        h('div',{class:'rp-id-item'},h('small',{},k),h('strong',{},v)))),
+    h('div',{class:'rp-cards'},
+      relatorioCardPDF('IES acumulado',formatoNota(resultado.ies),resultado.parcial?'Parcial: indicador(es) pendente(s)':status,cor),
+      relatorioCardPDF('Referência do IES',fmt(c.metaIES,0),'Meta de referência do modelo anterior'),
+      relatorioCardPDF('Indicadores informados',`${resultado.n}/${resultado.de}`,`Cobertura: ${fmt(resultado.cobertura,0)}%`),
+      relatorioCardPDF('Meses com dados',`${acumulado.meses}/12`,`${completos} mês(es) com nota completa`)),
+    h('h2',{class:'rp-section-title'},'Composição do IES acumulado'),
+    h('table',{},
+      h('colgroup',{},h('col',{style:'width:21%'}),h('col',{style:'width:7%'}),h('col',{style:'width:13%'}),h('col',{style:'width:11%'}),h('col',{style:'width:48%'})),
+      h('thead',{},h('tr',{},...['Indicador','Peso','Valor do ano','Nota (0–100)','Benchmark / referência'].map(t=>h('th',{},t)))),
+      h('tbody',{},...chaves.map(k=>{
+        const v=k==='ticketsFechados'?(valoresNota&&valoresNota[k]):valoresExibidos[k];
+        const bruto=valoresExibidos[k];
+        const b=benchPara(k,c,nivel);
+        let descr=b?b.texto:'Conforme regras do IES';
+        if(k==='ticketsFechados')descr+=' · Nota considera a média mensal';
+        if(k==='backlogTickets')descr+=' · Valor corresponde ao último mês informado';
+        return h('tr',{},
+          h('td',{},LABEL[k]),
+          h('td',{class:'rp-num'},`${fmt(pesos[k]*100,0)}%`),
+          h('td',{class:'rp-num'},indicadorPDF(k,bruto,k==='ticketsFechados'?false:true)),
+          h('td',{class:'rp-num'},temNumero(v)?formatoNota(nota(k,v,c)):'—'),
+          h('td',{},descr));
+      }),
+      h('tr',{class:'rp-total'},
+        h('td',{},'IES acumulado'),h('td',{class:'rp-num'},'100%'),
+        h('td',{},resultado.parcial?'PARCIAL':status),
+        h('td',{class:'rp-num'},formatoNota(resultado.ies)),
+        h('td',{},'Nota calculada pelas mesmas regras do dashboard')))),
+    ...(contexto.length?[h('div',{class:'rp-note-box'},
+      'Indicadores adicionais exibidos no dashboard como contexto do N2 (sem peso no IES): '+
+      contexto.map(k=>`${LABEL[k]}: ${indicadorPDF(k,valoresExibidos[k])}`).join(' · '))]:[]),
+    h('div',{class:'rp-foot'},
+      h('p',{},'IES acumulado calculado a partir dos meses lançados. Percentuais e P85 usam média simples dos meses com dado; o P85 anual é uma aproximação gerencial, não o percentil recalculado sobre todos os tickets.'),
+      h('p',{},'Tickets Fechados: soma no ano para exibição, média dos meses lançados para nota. Backlog: última posição informada. Indicadores ausentes não são convertidos em zero; notas parciais não devem ser comparadas com notas completas.'),
+      h('p',{},'Os pesos N2/N3 e referências de volume são propostas gerenciais conforme as Regras do IES do dashboard.')));
+
+  // Página 2: o detalhamento mês a mês, com apenas os dados deste analista.
+  const colunas=['Indicador','Peso',...MESES,'Ano'];
+  const p2=h('section',{class:'rp-page'},
+    cabecalhoRelatorioPDF('Detalhamento mês a mês',`${analista.nome} · ${nivel} · ${ano}`),
+    h('h2',{class:'rp-section-title'},'Indicadores oficiais por mês e acumulado do ano'),
+    h('table',{class:'rp-table-matrix'},
+      h('colgroup',{},h('col',{style:'width:19%'}),h('col',{style:'width:5%'}),...MESES.map(()=>h('col',{style:'width:5.5%'})),h('col',{style:'width:10%'})),
+      h('thead',{},h('tr',{},...colunas.map(t=>h('th',{},t)))),
+      h('tbody',{},
+        ...[...chaves,...contexto].map(k=>h('tr',{},
+          h('td',{},LABEL[k]+(contexto.includes(k)?' (contexto)':'')),
+          h('td',{},contexto.includes(k)?'—':`${fmt(pesos[k]*100,0)}%`),
+          ...meses.map(m=>h('td',{},indicadorPDF(k,m.linha[k],false))),
+          h('td',{},indicadorPDF(k,valoresExibidos[k],false)))),
+        h('tr',{class:'rp-total'},
+          h('td',{},'IES'),h('td',{},'100%'),
+          ...meses.map(m=>h('td',{},formatoNota(m.calc.ies)+(m.calc.ies!==null&&m.calc.parcial?'*':''))),
+          h('td',{},formatoNota(resultado.ies)+(resultado.ies!==null&&resultado.parcial?'*':''))))),
+    h('div',{class:'rp-note-box'},'* IES parcial: algum indicador obrigatório não foi lançado no mês/ano. Célula “—”: sem lançamento. O sinal * não equivale a zero e indica ausência de informações para nota completa.'),
+    h('div',{class:'rp-foot'},
+      h('p',{},'Este relatório contém exclusivamente os dados do analista identificado no cabeçalho.'),
+      h('p',{},`Fonte: Dashboard IES — UNLT / Back4App · Emissão: ${dataEmissao}. Documento de acompanhamento interno.`)));
+  raiz.replaceChildren(p1,p2);
+  // O título é usado como nome sugerido no diálogo "Salvar como PDF" do Chrome/Edge.
+  const tituloAnterior=document.title;
+  document.title=`IES_${slug(analista.nome)}_${ano}`;
+  window.addEventListener('afterprint',()=>{document.title=tituloAnterior;},{once:true});
+  window.print();
 }
 
 function renderLancar(){
@@ -1011,10 +1235,11 @@ function render(){
   if(tabLancamento) tabLancamento.hidden=!podeEditar();
   if(ui.tab==='lancar'&&!podeEditar()) ui.tab='techleaders';
   $('#tab-time').hidden = ui.tab!=='time'; $('#tab-analista').hidden = ui.tab!=='analista';
+  $('#tab-relatorios').hidden = ui.tab!=='relatorios';
   $('#tab-techleaders').hidden = ui.tab!=='techleaders';
   $('#tab-lancar').hidden = ui.tab!=='lancar'; $('#tab-regras').hidden = ui.tab!=='regras';
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===ui.tab));
-  if(ui.tab==='time') renderTime(); else if(ui.tab==='analista') renderAnalista(); else if(ui.tab==='techleaders') renderTechLeaders(); else if(ui.tab==='lancar') renderLancar(); else renderRegras();
+  if(ui.tab==='time') renderTime(); else if(ui.tab==='analista') renderAnalista(); else if(ui.tab==='relatorios') renderRelatoriosPDF(); else if(ui.tab==='techleaders') renderTechLeaders(); else if(ui.tab==='lancar') renderLancar(); else renderRegras();
 }
 function afterAuth(){
   const who=$('#who'), li=$('#loginBtn'), lo=$('#logoutBtn');
