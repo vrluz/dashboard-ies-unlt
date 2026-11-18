@@ -119,6 +119,17 @@ textarea{width:100%;min-height:90px;font:12px/1.4 var(--font-mono);padding:10px;
   .rp-card .rp-v{display:block;font-size:20px;font-weight:700;line-height:1.2;margin-top:2px}
   .rp-card .rp-detail{display:block;font-size:8.5px;color:#62696D;margin-top:2px}
   .rp-good{color:#136a3e!important}.rp-bad{color:#af2935!important}.rp-muted{color:#62696D!important}
+  /* Cores do PDF definidas a partir dos benchmarks JÁ EXISTENTES, sem alterar o IES. */
+  #ies-print-report td.rp-ind-good{color:#12683c!important;background:#e7f5ed!important;font-weight:700;border-left:3px solid #238b52!important}
+  #ies-print-report td.rp-ind-bad{color:#ad2634!important;background:#fdebed!important;font-weight:700;border-left:3px solid #d33e4b!important}
+  #ies-print-report td.rp-ind-neutral{color:#62696D!important}
+  #ies-print-report td.rp-ies-good{color:#12683c!important;background:#e7f5ed!important;font-weight:700}
+  #ies-print-report td.rp-ies-bad{color:#ad2634!important;background:#fdebed!important;font-weight:700}
+  #ies-print-report td.rp-ies-neutral{color:#62696D!important}
+  .rp-legend{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:2px 0 7px;font-size:8.5px;color:#4b5559}
+  .rp-legend span{display:inline-flex;align-items:center;gap:5px}
+  .rp-dot{width:9px;height:9px;display:inline-block;border-radius:2px;border:1px solid transparent}
+  .rp-dot.good{background:#e7f5ed;border-color:#238b52}.rp-dot.bad{background:#fdebed;border-color:#d33e4b}.rp-dot.neutral{background:#eceff0;border-color:#879095}
   .rp-section-title{font-size:11px;font-weight:700;margin:10px 0 5px;letter-spacing:.2px;color:#002232}
   #ies-print-report table{border-collapse:collapse;width:100%!important;min-width:0!important;table-layout:fixed;margin:0}
   #ies-print-report th{font:700 8.6px "Aptos",sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left;color:#002232;background:#edf1f3;border-bottom:1px solid #ccd9de;padding:5px 5px}
@@ -911,6 +922,23 @@ function indicadorPDF(k,v,unidade=true){
   if(k==='ticketsFechados'||k==='backlogTickets') return n+' tickets';
   return k==='tme'?n+' dias':n+'%';
 }
+// Aplica as faixas que o próprio dashboard já usa para cada nível.
+// No PDF, tanto Saudável quanto Excelente/Alta performance são verdes.
+// Valores abaixo do saudável são vermelhos e campos ausentes são neutros.
+function classeIndicadorPDF(k, valor, nivel){
+  const banda=faixa(k,valor,state.cfg,nivel);
+  return banda===null?'rp-ind-neutral':banda==='abaixo'?'rp-ind-bad':'rp-ind-good';
+}
+function classeIESPDF(calculo){
+  if(!calculo||calculo.ies===null||calculo.parcial) return 'rp-ies-neutral';
+  return calculo.ies>=state.cfg.metaIES?'rp-ies-good':'rp-ies-bad';
+}
+function legendaCoresPDF(){
+  return h('div',{class:'rp-legend'},
+    h('span',{},h('i',{class:'rp-dot good'}),'Verde: saudável ou acima'),
+    h('span',{},h('i',{class:'rp-dot bad'}),'Vermelho: abaixo do benchmark'),
+    h('span',{},h('i',{class:'rp-dot neutral'}),'Cinza: não informado ou IES parcial'));
+}
 function cabecalhoRelatorioPDF(titulo,subtitulo){
   return h('div',{class:'rp-head'},
     h('div',{},h('div',{class:'rp-brand'},'STARIAN  /  SUPORTE UNLT'),h('h1',{},titulo)),
@@ -1011,6 +1039,7 @@ function exportarRelatorioAnalistaPDF(analista,ano){
       relatorioCardPDF('Indicadores informados',`${resultado.n}/${resultado.de}`,`Cobertura: ${fmt(resultado.cobertura,0)}%`),
       relatorioCardPDF('Meses com dados',`${acumulado.meses}/12`,`${completos} mês(es) com nota completa`)),
     h('h2',{class:'rp-section-title'},'Composição do IES acumulado'),
+    legendaCoresPDF(),
     h('table',{},
       h('colgroup',{},h('col',{style:'width:21%'}),h('col',{style:'width:7%'}),h('col',{style:'width:13%'}),h('col',{style:'width:11%'}),h('col',{style:'width:48%'})),
       h('thead',{},h('tr',{},...['Indicador','Peso','Valor do ano','Nota (0–100)','Benchmark / referência'].map(t=>h('th',{},t)))),
@@ -1024,14 +1053,14 @@ function exportarRelatorioAnalistaPDF(analista,ano){
         return h('tr',{},
           h('td',{},LABEL[k]),
           h('td',{class:'rp-num'},`${fmt(pesos[k]*100,0)}%`),
-          h('td',{class:'rp-num'},indicadorPDF(k,bruto,k==='ticketsFechados'?false:true)),
-          h('td',{class:'rp-num'},temNumero(v)?formatoNota(nota(k,v,c)):'—'),
+          h('td',{class:'rp-num '+classeIndicadorPDF(k,v,nivel)},indicadorPDF(k,bruto,k==='ticketsFechados'?false:true)),
+          h('td',{class:'rp-num '+classeIndicadorPDF(k,v,nivel)},temNumero(v)?formatoNota(nota(k,v,c)):'—'),
           h('td',{},descr));
       }),
       h('tr',{class:'rp-total'},
         h('td',{},'IES acumulado'),h('td',{class:'rp-num'},'100%'),
         h('td',{},resultado.parcial?'PARCIAL':status),
-        h('td',{class:'rp-num'},formatoNota(resultado.ies)),
+        h('td',{class:'rp-num '+classeIESPDF(resultado)},formatoNota(resultado.ies)),
         h('td',{},'Nota calculada pelas mesmas regras do dashboard')))),
     ...(contexto.length?[h('div',{class:'rp-note-box'},
       'Indicadores adicionais exibidos no dashboard como contexto do N2 (sem peso no IES): '+
@@ -1046,6 +1075,7 @@ function exportarRelatorioAnalistaPDF(analista,ano){
   const p2=h('section',{class:'rp-page'},
     cabecalhoRelatorioPDF('Detalhamento mês a mês',`${analista.nome} · ${nivel} · ${ano}`),
     h('h2',{class:'rp-section-title'},'Indicadores oficiais por mês e acumulado do ano'),
+    legendaCoresPDF(),
     h('table',{class:'rp-table-matrix'},
       h('colgroup',{},h('col',{style:'width:19%'}),h('col',{style:'width:5%'}),...MESES.map(()=>h('col',{style:'width:5.5%'})),h('col',{style:'width:10%'})),
       h('thead',{},h('tr',{},...colunas.map(t=>h('th',{},t)))),
@@ -1053,13 +1083,13 @@ function exportarRelatorioAnalistaPDF(analista,ano){
         ...[...chaves,...contexto].map(k=>h('tr',{},
           h('td',{},LABEL[k]+(contexto.includes(k)?' (contexto)':'')),
           h('td',{},contexto.includes(k)?'—':`${fmt(pesos[k]*100,0)}%`),
-          ...meses.map(m=>h('td',{},indicadorPDF(k,m.linha[k],false))),
-          h('td',{},indicadorPDF(k,valoresExibidos[k],false)))),
+          ...meses.map(m=>h('td',{class:classeIndicadorPDF(k,m.linha[k],nivel)},indicadorPDF(k,m.linha[k],false))),
+          h('td',{class:classeIndicadorPDF(k,(k==='ticketsFechados' ? valoresNota?.[k] : valoresExibidos[k]),nivel)},indicadorPDF(k,valoresExibidos[k],false)))),
         h('tr',{class:'rp-total'},
           h('td',{},'IES'),h('td',{},'100%'),
-          ...meses.map(m=>h('td',{},formatoNota(m.calc.ies)+(m.calc.ies!==null&&m.calc.parcial?'*':''))),
-          h('td',{},formatoNota(resultado.ies)+(resultado.ies!==null&&resultado.parcial?'*':''))))),
-    h('div',{class:'rp-note-box'},'* IES parcial: algum indicador obrigatório não foi lançado no mês/ano. Célula “—”: sem lançamento. O sinal * não equivale a zero e indica ausência de informações para nota completa.'),
+          ...meses.map(m=>h('td',{class:classeIESPDF(m.calc)},formatoNota(m.calc.ies)+(m.calc.ies!==null&&m.calc.parcial?'*':''))),
+          h('td',{class:classeIESPDF(resultado)},formatoNota(resultado.ies)+(resultado.ies!==null&&resultado.parcial?'*':''))))),
+    h('div',{class:'rp-note-box'},'* IES parcial: algum indicador obrigatório não foi lançado no mês/ano. Célula “—”: sem lançamento. Verde/vermelho refletem o benchmark do indicador, não a sua nota ponderada. O sinal * não equivale a zero.'),
     h('div',{class:'rp-foot'},
       h('p',{},'Este relatório contém exclusivamente os dados do analista identificado no cabeçalho.'),
       h('p',{},`Fonte: Dashboard IES — UNLT / Back4App · Emissão: ${dataEmissao}. Documento de acompanhamento interno.`)));
